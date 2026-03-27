@@ -1,0 +1,50 @@
+{
+  "appId": "com.segasto.app",
+  "productName": "Segasto",
+"directories": {
+    "output": "release",
+    "buildResources": "assets"
+  },
+  "files": [
+    "electron/**/*",
+    "dist/**/*",
+    "!dist/**/*.map",
+    "!node_modules/**/*",
+    "node_modules/better-sqlite3/lib/**/*",
+    "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+    "node_modules/better-sqlite3/package.json",
+    "node_modules/bindings/**/*",
+    "node_modules/file-uri-to-path/**/*"
+  ],
+  "extraMetadata": {
+    "main": "electron/main.js",
+    "dependencies": {},
+    "optionalDependencies": {}
+  },
+  "npmRebuild": false,
+  "asar": {
+    "smartUnpack": false
+  },
+  "asarUnpack": [
+    "node_modules/better-sqlite3/**/*",
+    "node_modules/bindings/**/*",
+    "node_modules/file-uri-to-path/**/*"
+  ],
+  "win": {
+    "target": [{ "target": "nsis", "arch": ["x64"] }],
+    "icon": "assets/images/icon.ico"
+  },
+  "mac": {
+    "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
+    "icon": "assets/images/icon.png"
+  },
+  "linux": {
+    "target": [{ "target": "AppImage", "arch": ["x64"] }],
+    "icon": "assets/images/icon.png"
+  },
+  "compression": "maximum",
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); pkg=d.get\\(''''packages'''',{}\\).get\\(''''node_modules/better-sqlite3'''',{}\\); print\\(json.dumps\\({k:v for k,v in pkg.items\\(\\) if k in [''''version'''',''''optional'''',''''resolved'''']}, indent=2\\)\\)\")",
+      "Bash(npx electron-rebuild:*)",
+      "Bash(ls \"/c/tmp/segasto/app/\\(tabs\\)\")",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(grep -v \"^d.*\\\\.$\")",
+      "Bash(du -sh C:/tmp/segasto/release/win-unpacked/*)",
+      "Bash(dir \"C:\\\\tmp\\\\segasto\\\\electron\")"
+    ]
+  }
+}
