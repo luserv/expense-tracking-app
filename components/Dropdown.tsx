@@ -1,18 +1,9 @@
 import React, { useState } from 'react';
-import {
-  FlatList,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ChevronDown, Check } from 'lucide-react-native';
+import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { C, F, R, S } from '../utils/theme';
 
-interface Option {
-  label: string;
-  value: string;
-}
-
+interface Option { label: string; value: string }
 interface DropdownProps {
   options: Option[];
   value: string | null;
@@ -31,54 +22,50 @@ export default function Dropdown({
   nullLabel = 'Sin especificar',
 }: DropdownProps) {
   const [open, setOpen] = useState(false);
+  const selectedLabel = value ? options.find(o => o.value === value)?.label : null;
 
-  const selectedLabel = value
-    ? options.find(o => o.value === value)?.label
-    : null;
+  const handleSelect = (val: string | null) => { onSelect(val); setOpen(false); };
 
-  const handleSelect = (val: string | null) => {
-    onSelect(val);
-    setOpen(false);
-  };
+  const listData = allowNull
+    ? [{ label: nullLabel, value: '__null__' }, ...options]
+    : options;
 
   return (
     <>
-      <Pressable style={styles.trigger} onPress={() => setOpen(true)}>
-        <Text style={[styles.triggerText, !selectedLabel && styles.placeholder]}>
+      <Pressable
+        style={({ pressed }) => [s.trigger, pressed && { backgroundColor: C.surfaceHigh }]}
+        onPress={() => setOpen(true)}
+      >
+        <Text style={[s.triggerText, !selectedLabel && s.placeholder]} numberOfLines={1}>
           {selectedLabel ?? (allowNull ? nullLabel : placeholder)}
         </Text>
-        <Text style={styles.arrow}>▼</Text>
+        <ChevronDown size={16} color={C.textDim} />
       </Pressable>
 
-      <Modal
-        visible={open}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOpen(false)}
-      >
-        <Pressable style={styles.overlay} onPress={() => setOpen(false)}>
-          <View style={styles.sheet}>
-            <View style={styles.handle} />
-
+      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <Pressable style={s.overlay} onPress={() => setOpen(false)}>
+          <View style={s.sheet}>
+            <View style={s.handle} />
             <FlatList
-              data={allowNull ? [{ label: nullLabel, value: '__null__' }, ...options] : options}
+              data={listData}
               keyExtractor={item => item.value}
-              ItemSeparatorComponent={() => <View style={styles.separator} />}
+              ItemSeparatorComponent={() => <View style={s.sep} />}
               renderItem={({ item }) => {
                 const isNull = item.value === '__null__';
                 const isSelected = isNull ? value === null : value === item.value;
                 return (
                   <Pressable
-                    style={[styles.option, isSelected && styles.optionSelected]}
+                    style={({ pressed }) => [s.option, isSelected && s.optionActive, pressed && s.optionPressed]}
                     onPress={() => handleSelect(isNull ? null : item.value)}
                   >
-                    <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
+                    <Text style={[s.optionText, isSelected && s.optionTextActive]} numberOfLines={1}>
                       {item.label}
                     </Text>
-                    {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                    {isSelected && <Check size={16} color={C.accent} strokeWidth={2.5} />}
                   </Pressable>
                 );
               }}
+              contentContainerStyle={s.listContent}
             />
           </View>
         </Pressable>
@@ -87,57 +74,32 @@ export default function Dropdown({
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   trigger: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: '#F9F9F9',
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    borderWidth: 1, borderColor: C.border, borderRadius: R.sm,
+    paddingHorizontal: 14, paddingVertical: 12,
+    backgroundColor: C.surfaceUp,
   },
-  triggerText: { fontSize: 16, color: '#000' },
-  placeholder: { color: '#C7C7CC' },
-  arrow: { fontSize: 11, color: '#8E8E93' },
+  triggerText: { fontSize: F.base, color: C.text, flex: 1, marginRight: S.xs },
+  placeholder: { color: C.textDim },
 
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
+  overlay: { flex: 1, backgroundColor: C.scrim, justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 16,
-    paddingBottom: 32,
-    paddingTop: 12,
-    maxHeight: '60%',
+    backgroundColor: C.surface,
+    borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl,
+    paddingTop: 12, maxHeight: '62%',
+    borderTopWidth: 1, borderColor: C.border,
   },
-  handle: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#E5E5EA',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#E5E5EA',
-  },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 10 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 32 },
+  sep: { height: StyleSheet.hairlineWidth, backgroundColor: C.borderFaint, marginHorizontal: 4 },
   option: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 4,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 15, paddingHorizontal: 4, borderRadius: R.xs,
   },
-  optionSelected: { backgroundColor: '#F0F7FF' },
-  optionText: { fontSize: 16, color: '#000' },
-  optionTextSelected: { color: '#007AFF', fontWeight: '600' },
-  checkmark: { fontSize: 16, color: '#007AFF' },
+  optionActive: { },
+  optionPressed: { backgroundColor: C.surfaceHigh },
+  optionText: { fontSize: F.base, color: C.textSec, flex: 1, marginRight: S.xs },
+  optionTextActive: { color: C.accent, fontWeight: '700' },
 });

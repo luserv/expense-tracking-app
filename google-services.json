@@ -1,33 +1,33 @@
 {
   "project_info": {
-    "project_number": "461026464928",
-    "project_id": "c0ntacts",
-    "storage_bucket": "c0ntacts.firebasestorage.app"
+    "project_number": "282199354699",
+    "project_id": "segast0",
+    "storage_bucket": "segast0.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:461026464928:android:8ce079c01286f553b265c5",
+        "mobilesdk_app_id": "1:282199354699:android:7bde0ab6dacb10697accce",
         "android_client_info": {
-          "package_name": "com.luserv.c0ntacts"
+          "package_name": "com.luserv.chiro"
         }
       },
       "oauth_client": [
         {
-          "client_id": "461026464928-uqthqedb0oekcl2rgch1ggq9rkf6f3gq.apps.googleusercontent.com",
+          "client_id": "282199354699-8esnut03hneneuedt4b8ga40e8ua3drb.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyBl4G_KR17l32v9b1EPe3Wjai0Uxev6NZI"
+          "current_key": "AIzaSyBn28o1QR1NoSG5dUNs4ISFe1NjaV8tj0U"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "461026464928-uqthqedb0oekcl2rgch1ggq9rkf6f3gq.apps.googleusercontent.com",
+              "client_id": "282199354699-8esnut03hneneuedt4b8ga40e8ua3drb.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

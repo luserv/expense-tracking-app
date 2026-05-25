@@ -2,14 +2,14 @@ import 'dotenv/config';
 
 export default {
   expo: {
-    name: "Contacts",
-    slug: "contacts-app-offline",
+    name: "Chiro",
+    slug: "chiro-app",
     version: "1.0.0",
-    scheme: "contacts",
+    scheme: "chiro",
     orientation: "portrait",
     platforms: ["android", "web"],
     android: {
-      package: "com.luserv2.contacts",
+      package: "com.luserv.chiro",
       googleServicesFile: "./google-services.json"
     },
     plugins: [
@@ -26,7 +26,7 @@ export default {
     ],
     extra: {
       eas: {
-        projectId: "018fed16-4d84-4465-93bc-6c4f29dbca24"
+        projectId: "0f50dcc0-b0dc-4d9d-a8cd-c712f8eb8df0"
       }
     }
   }

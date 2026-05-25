@@ -5,9 +5,9 @@ import { useAuth } from '../utils/authContext';
 const TEST_APP_ID = 'ca-app-pub-3940256099942544~3347511713';
 const TEST_BANNER_ID = 'ca-app-pub-3940256099942544/6300978111';
 
-// IDs reales (reemplazar cuando tengas tu cuenta AdMob)
-const REAL_APP_ID = 'ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX';
-const REAL_BANNER_ID = 'ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX';
+// IDs reales de producción
+const REAL_APP_ID = 'ca-app-pub-7829683190160725~2433211934';
+const REAL_BANNER_ID = 'ca-app-pub-7829683190160725/5578250022';
 
 const IS_DEV = __DEV__;
 export const ADMOB_APP_ID = IS_DEV ? TEST_APP_ID : REAL_APP_ID;

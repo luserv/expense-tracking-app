@@ -1,8 +1,9 @@
-// Web / Electron: usa Firebase signInWithPopup directamente
+// Web / Electron: Firebase signInWithPopup
 import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../utils/authContext';
+import { C, F, R, S, shadow } from '../utils/theme';
 
 export default function LoginScreen() {
   const { user, isGuest, loading, signIn, continueAsGuest } = useAuth();
@@ -15,68 +16,97 @@ export default function LoginScreen() {
   }, [user, isGuest, loading]);
 
   const handleSignIn = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      await signIn();
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleGuest = async () => {
-    await continueAsGuest();
+    setError(null); setBusy(true);
+    try { await signIn(); } catch (e: any) { setError(e.message); } finally { setBusy(false); }
   };
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator size="large" color="#007AFF" /></View>;
+    return (
+      <View style={s.center}>
+        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+        <ActivityIndicator size="large" color={C.accent} />
+      </View>
+    );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.card}>
-        <View style={styles.iconPlaceholder}>
-          <Text style={styles.iconText}>👥</Text>
+    <View style={s.container}>
+      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+
+      <View style={s.card}>
+        {/* Logo mark */}
+        <View style={s.logoWrap}>
+          <Text style={s.logoMark}>S</Text>
         </View>
-        <Text style={styles.title}>Segasto</Text>
-        <Text style={styles.subtitle}>Tu control de gastos, siempre contigo.</Text>
-        <Pressable style={[styles.googleBtn, busy && styles.btnDisabled]} onPress={handleSignIn} disabled={busy}>
+
+        <Text style={s.appName}>Chiro</Text>
+        <Text style={s.tagline}>Tu control de gastos, siempre contigo.</Text>
+
+        <Pressable
+          style={({ pressed }) => [s.primaryBtn, busy && s.btnDisabled, pressed && { opacity: 0.88 }]}
+          onPress={handleSignIn}
+          disabled={busy}
+        >
           {busy
             ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.googleBtnText}>🔑 Continuar con Google</Text>}
+            : <Text style={s.primaryBtnText}>Continuar con Google</Text>
+          }
         </Pressable>
-        <Text style={styles.googleHint}>Activa el backup automático en Google Drive</Text>
-        <Pressable style={styles.guestBtn} onPress={handleGuest}>
-          <Text style={styles.guestBtnText}>Continuar sin iniciar sesión</Text>
+
+        <Text style={s.hint}>Activa el backup en Google Drive</Text>
+
+        <Pressable style={s.ghostBtn} onPress={continueAsGuest}>
+          <Text style={s.ghostBtnText}>Continuar sin iniciar sesión</Text>
         </Pressable>
-        {error && <Text style={styles.error}>{error}</Text>}
-        <Text style={styles.disclaimer}>Al iniciar sesión aceptas que tus datos de licencia se almacenen de forma segura.</Text>
+
+        {error && <Text style={s.error}>{error}</Text>}
+
+        <Text style={s.disclaimer}>
+          Al iniciar sesión aceptas que tus datos de licencia se almacenen de forma segura.
+        </Text>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center', padding: S.xl },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.bg },
+
   card: {
-    backgroundColor: '#fff', borderRadius: 24, padding: 32,
-    width: '100%', maxWidth: 380, alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15, shadowRadius: 12, elevation: 8,
+    backgroundColor: C.surface,
+    borderRadius: R.xl, padding: 32,
+    width: '100%', maxWidth: 380,
+    alignItems: 'center',
+    borderWidth: 1, borderColor: C.border,
+    ...shadow.md,
   },
-  iconPlaceholder: { width: 88, height: 88, borderRadius: 44, backgroundColor: '#E5F0FF', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  iconText: { fontSize: 40 },
-  title: { fontSize: 28, fontWeight: '700', color: '#000', marginBottom: 8 },
-  subtitle: { fontSize: 15, color: '#8E8E93', textAlign: 'center', marginBottom: 32 },
-  googleBtn: { backgroundColor: '#007AFF', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 24, width: '100%', alignItems: 'center', marginBottom: 6 },
-  btnDisabled: { opacity: 0.6 },
-  googleBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  googleHint: { fontSize: 12, color: '#8E8E93', textAlign: 'center', marginBottom: 16 },
-  guestBtn: { width: '100%', alignItems: 'center', paddingVertical: 12, marginBottom: 8 },
-  guestBtnText: { color: '#007AFF', fontSize: 15, fontWeight: '500' },
-  error: { color: '#FF3B30', fontSize: 13, textAlign: 'center', marginBottom: 12 },
-  disclaimer: { fontSize: 12, color: '#C7C7CC', textAlign: 'center', marginTop: 8 },
+
+  logoWrap: {
+    width: 72, height: 72, borderRadius: 20,
+    backgroundColor: C.accentBg,
+    borderWidth: 1, borderColor: C.accent + '44',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: S.lg,
+  },
+  logoMark: { fontSize: 34, fontWeight: '900', color: C.accent },
+
+  appName: { fontSize: F['2xl'], fontWeight: '800', color: C.text, marginBottom: S.xs },
+  tagline: { fontSize: F.base, color: C.textSec, textAlign: 'center', marginBottom: S['3xl'], lineHeight: 22 },
+
+  primaryBtn: {
+    backgroundColor: C.accent, borderRadius: R.sm,
+    paddingVertical: 15, width: '100%',
+    alignItems: 'center', marginBottom: S.xs,
+  },
+  btnDisabled: { opacity: 0.55 },
+  primaryBtnText: { color: '#fff', fontSize: F.base, fontWeight: '700' },
+
+  hint: { fontSize: F.xs, color: C.textDim, textAlign: 'center', marginBottom: S.lg },
+
+  ghostBtn: { width: '100%', alignItems: 'center', paddingVertical: 13 },
+  ghostBtnText: { color: C.textSec, fontSize: F.base, fontWeight: '500' },
+
+  error: { color: C.expense, fontSize: F.sm, textAlign: 'center', marginBottom: S.sm, marginTop: S.xs },
+  disclaimer: { fontSize: F.xs, color: C.textDim, textAlign: 'center', marginTop: S.sm, lineHeight: 18 },
 });

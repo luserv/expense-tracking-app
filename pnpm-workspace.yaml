@@ -1,0 +1,7 @@
+allowBuilds:
+  '@firebase/util': true
+  better-sqlite3: true
+  electron: true
+  electron-winstaller: false
+  protobufjs: false
+  unrs-resolver: false

@@ -8,7 +8,28 @@
       "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
       "Bash(grep -v \"^d.*\\\\.$\")",
       "Bash(du -sh C:/tmp/segasto/release/win-unpacked/*)",
-      "Bash(dir \"C:\\\\tmp\\\\segasto\\\\electron\")"
+      "Bash(dir \"C:\\\\tmp\\\\segasto\\\\electron\")",
+      "Bash(npx tsc *)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(node_modules/.bin/tsc *)",
+      "Bash(node node_modules/.pnpm/electron@32.3.3/node_modules/electron/install.js)",
+      "Bash(pnpm run *)",
+      "Bash(node install.js)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['version']\\)\")",
+      "Bash(node *)",
+      "Bash(pnpm add *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('main:', d.get\\('main','?'\\), '| exports:', list\\(d.get\\('exports',{}\\).keys\\(\\)\\)[:3]\\)\")",
+      "Bash(unzip -o \"/home/kv/.cache/electron/2a4c2a9e0c4d0a2f7d7f2309c010f1b2fbb19a7f1a2ca4cd653d0fcc2aa53a99/electron-v32.3.3-linux-x64.zip\" -d \"/home/kv/Projects/programming/expense-tracking-app/node_modules/electron/dist\")",
+      "Bash(chmod +x /home/kv/Projects/programming/expense-tracking-app/node_modules/electron/dist/electron)",
+      "Bash(/home/kv/Projects/programming/expense-tracking-app/node_modules/.pnpm/electron@32.3.3/node_modules/electron/dist/electron *)",
+      "Bash(xxd /home/kv/Projects/programming/expense-tracking-app/node_modules/.pnpm/electron@32.3.3/node_modules/electron/path.txt)",
+      "Bash(pnpm install *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('exports:', list\\(d.get\\('exports',{}\\).get\\('./dist/index',{}\\).items\\(\\)\\)[:3] if './dist/index' in d.get\\('exports',{}\\) else 'no ./dist/index export'\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('version:', d['version']\\)\")",
+      "Bash(python3 -c \"import json,sys; p=json.load\\(sys.stdin\\); print\\('exports:', json.dumps\\(p.get\\('exports', 'NONE'\\), indent=2\\)[:500]\\); print\\('main:', p.get\\('main','NONE'\\)\\)\")",
+      "Skill(impeccable)",
+      "Bash(python3 *)",
+      "Bash(git add *)"
     ]
   }
 }

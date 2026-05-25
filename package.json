@@ -1,7 +1,8 @@
 {
-  "name": "segasto",
+  "name": "chiro",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "packageManager": "pnpm@10.33.4",
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
@@ -25,6 +26,7 @@
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.1.6",
     "date-fns": "^4.1.0",
+    "eas-cli": "^19.0.8",
     "expo": "~54.0.33",
     "expo-auth-session": "~7.0.10",
     "expo-blur": "~15.0.8",
@@ -54,6 +56,7 @@
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-google-mobile-ads": "^16.3.0",
+    "react-native-iap": "^15.3.1",
     "react-native-reanimated": "~4.1.0",
     "react-native-safe-area-context": "5.6.0",
     "react-native-screens": "~4.16.0",
@@ -65,6 +68,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
+    "@electron/get": "^5.0.0",
     "@electron/rebuild": "^4.0.3",
     "@types/react": "~19.1.10",
     "concurrently": "^9.2.1",
@@ -76,6 +80,7 @@
     "eslint-config-expo": "~10.0.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
+    "extract-zip": "^2.0.1",
     "png-to-ico": "^3.0.1",
     "prettier": "^3.6.2",
     "typescript": "~5.9.2",

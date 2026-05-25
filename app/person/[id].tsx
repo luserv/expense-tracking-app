@@ -1,5 +1,8 @@
+/**
+ * Detalle de persona / préstamos — Segato (dark theme + responsive)
+ */
 import { useLocalSearchParams, useNavigation } from 'expo-router';
-import { Plus } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
@@ -8,6 +11,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -15,6 +19,8 @@ import {
 } from 'react-native';
 import { Loan, Payment, Person, useExpenses } from '../../utils/context';
 import { useI18n } from '../../utils/i18n';
+import { CONTENT_MAX_W, FORM_MAX_W, useLayout } from '../../utils/responsive';
+import { C, F, R, S, shadow } from '../../utils/theme';
 
 function todayIso(): string {
   const n = new Date();
@@ -48,6 +54,8 @@ export default function PersonDetail() {
   const { t } = useI18n();
   const { getPerson, getLoansByPerson, createLoan, updateLoan, updateLoanPaid, deleteLoan,
           getPaymentsByLoan, createPayment, deletePayment } = useExpenses();
+  const l = useLayout();
+  const isWide = !l.isPhone;
 
   const [person, setPerson] = useState<Person | null>(null);
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -99,8 +107,7 @@ export default function PersonDetail() {
     setter(formatted);
   };
 
-  // ── Loan modal ──────────────────────────────────────────────────────────────
-
+  // Loan modal handlers
   const openCreateLoan = () => {
     setDesc(''); setAmount(''); setDate(isoToDisplay(todayIso())); setInterestRate('');
     setLoanModal({ mode: 'create' });
@@ -149,8 +156,7 @@ export default function PersonDetail() {
     await load();
   };
 
-  // ── Payment modal ───────────────────────────────────────────────────────────
-
+  // Payment modal handlers
   const openPaymentModal = (loan: Loan) => {
     setPayAmount(''); setPayDate(isoToDisplay(todayIso())); setPayNotes('');
     setPaymentModal({ loan });
@@ -190,37 +196,44 @@ export default function PersonDetail() {
     }
   };
 
-  // ── Helpers ──────────────────────────────────────────────────────────────────
-
   const previewAmt = parseFloat(amount.replace(',', '.')) || 0;
   const previewRate = parseFloat(interestRate.replace(',', '.')) || 0;
   const previewInterest = previewAmt * (previewRate / 100);
   const previewTotal = previewAmt + previewInterest;
   const showPreview = previewAmt > 0 && previewRate > 0;
 
-  const totalLoaned = loans.reduce((s, l) => s + calcTotal(l.amount, l.interest_rate), 0);
-  const totalAbonado = loans.reduce((s, l) => s + l.total_paid, 0);
+  const totalLoaned  = loans.reduce((s, l) => s + calcTotal(l.amount, l.interest_rate), 0);
+  const totalAbonado = loans.reduce((s, l) => s + (l.total_paid ?? 0), 0);
   const totalPending = loans
     .filter(l => l.is_paid === 0)
-    .reduce((s, l) => s + Math.max(0, calcTotal(l.amount, l.interest_rate) - l.total_paid), 0);
+    .reduce((s, l) => s + Math.max(0, calcTotal(l.amount, l.interest_rate) - (l.total_paid ?? 0)), 0);
+
+  const fmt = (n: number) => '$' + n.toFixed(2);
+
+  // Shared modal styles
+  const overlayStyle = [s.overlay, isWide && s.overlayDesktop];
+  const sheetStyle   = [s.sheet, isWide && s.sheetDesktop];
 
   return (
-    <View style={styles.container}>
-      <View style={styles.summaryCard}>
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>{t.loans.totalLoaned}</Text>
-          <Text style={[styles.summaryValue, styles.loanedColor]}>${totalLoaned.toFixed(2)}</Text>
+    <View style={s.container}>
+      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+
+      {/* Summary */}
+      <View style={[s.summaryCard, l.isDesktop && { maxWidth: CONTENT_MAX_W, alignSelf: 'center', width: '100%', marginHorizontal: 0 }]}>
+        <View style={s.summaryItem}>
+          <Text style={s.summaryLabel}>{t.loans.totalLoaned}</Text>
+          <Text style={[s.summaryValue, { color: C.accent }]}>{fmt(totalLoaned)}</Text>
         </View>
-        <View style={styles.summaryDivider} />
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>{t.loans.totalPaid}</Text>
-          <Text style={[styles.summaryValue, styles.paidColor]}>${totalAbonado.toFixed(2)}</Text>
+        <View style={s.summaryDivider} />
+        <View style={s.summaryItem}>
+          <Text style={s.summaryLabel}>{t.loans.totalPaid}</Text>
+          <Text style={[s.summaryValue, { color: C.income }]}>{fmt(totalAbonado)}</Text>
         </View>
-        <View style={styles.summaryDivider} />
-        <View style={styles.summaryItem}>
-          <Text style={styles.summaryLabel}>{t.loans.outstanding}</Text>
-          <Text style={[styles.summaryValue, totalPending > 0 ? styles.pendingColor : styles.paidColor]}>
-            ${totalPending.toFixed(2)}
+        <View style={s.summaryDivider} />
+        <View style={s.summaryItem}>
+          <Text style={s.summaryLabel}>{t.loans.outstanding}</Text>
+          <Text style={[s.summaryValue, { color: totalPending > 0 ? C.warn : C.income }]}>
+            {fmt(totalPending)}
           </Text>
         </View>
       </View>
@@ -228,90 +241,89 @@ export default function PersonDetail() {
       <FlatList
         data={loans}
         keyExtractor={item => item.loan_id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[s.listContent, l.isDesktop && { maxWidth: CONTENT_MAX_W, width: '100%', alignSelf: 'center' }]}
         renderItem={({ item }) => {
           const total = calcTotal(item.amount, item.interest_rate);
-          const outstanding = Math.max(0, total - item.total_paid);
+          const outstanding = Math.max(0, total - (item.total_paid ?? 0));
           const hasInterest = item.interest_rate > 0;
           const isPaid = item.is_paid === 1 || outstanding <= 0;
           const loanPayments = payments[item.loan_id] ?? [];
           const isExpanded = expandedLoan === item.loan_id;
 
           return (
-            <View style={styles.loanCard}>
-              {/* Header row */}
-              <View style={styles.loanRow}>
-                <View style={[styles.statusBar, { backgroundColor: isPaid ? '#34C759' : '#FF9500' }]} />
-                <View style={styles.loanInfo}>
-                  <Text style={styles.loanDesc}>{item.description}</Text>
-                  <Text style={styles.loanDate}>{isoToDisplay(item.date)}</Text>
+            <View style={[s.loanCard, isPaid && s.loanCardPaid]}>
+              {/* Paid indicator strip — top border accent instead of side stripe */}
+              {isPaid && <View style={s.paidTopStrip} />}
+
+              {/* Header */}
+              <View style={s.loanHeader}>
+                <View style={[s.loanStatusDot, { backgroundColor: isPaid ? C.income + '22' : C.warn + '22' }]}>
+                  <View style={[s.loanStatusDotInner, { backgroundColor: isPaid ? C.income : C.warn }]} />
+                </View>
+                <View style={s.loanInfo}>
+                  <Text style={s.loanDesc}>{item.description}</Text>
+                  <Text style={s.loanDate}>{isoToDisplay(item.date)}</Text>
                   {hasInterest && (
-                    <Text style={styles.interestLabel}>
-                      {item.interest_rate}% → ${item.amount.toFixed(2)} × 0.{String(item.interest_rate).replace('.', '')} = ${(item.amount * item.interest_rate / 100).toFixed(2)}
+                    <Text style={s.interestLabel}>
+                      {item.interest_rate}% → {fmt(item.amount)} × 0.{String(item.interest_rate).replace('.', '')} = {fmt(item.amount * item.interest_rate / 100)}
                     </Text>
                   )}
                 </View>
-                <View style={styles.loanRight}>
-                  <Text style={styles.loanAmountOriginal}>${item.amount.toFixed(2)}</Text>
+                <View style={s.loanRight}>
+                  <Text style={s.loanAmountOriginal}>{fmt(item.amount)}</Text>
                   {hasInterest && (
-                    <Text style={styles.loanTotal}>{t.loans.estimatedTotal}: ${total.toFixed(2)}</Text>
+                    <Text style={s.loanTotal}>{t.loans.estimatedTotal}: {fmt(total)}</Text>
                   )}
-                  {item.total_paid > 0 && (
-                    <Text style={styles.loanPaidAmount}>{t.loans.totalPaid}: ${item.total_paid.toFixed(2)}</Text>
+                  {(item.total_paid ?? 0) > 0 && (
+                    <Text style={[s.loanPaidAmount, { color: C.income }]}>{t.loans.totalPaid}: {fmt(item.total_paid ?? 0)}</Text>
                   )}
-                  <Text style={[styles.loanOutstanding, isPaid ? styles.paidColor : styles.pendingColor]}>
-                    {t.loans.outstanding}: ${outstanding.toFixed(2)}
+                  <Text style={[s.loanOutstanding, { color: isPaid ? C.income : C.warn }]}>
+                    {t.loans.outstanding}: {fmt(outstanding)}
                   </Text>
                 </View>
               </View>
 
               {/* Actions */}
-              <View style={styles.loanActions}>
-                <Pressable style={styles.abonoBtn} onPress={() => openPaymentModal(item)}>
-                  <Text style={styles.abonoBtnText}>+ {t.loans.payment}</Text>
+              <View style={s.loanActions}>
+                <Pressable style={[s.actionChip, { backgroundColor: C.incomeBg, borderColor: C.income + '44' }]} onPress={() => openPaymentModal(item)}>
+                  <Text style={[s.actionChipText, { color: C.income }]}>+ {t.loans.payment}</Text>
                 </Pressable>
-                <Pressable
-                  style={styles.expandBtn}
-                  onPress={() => toggleExpand(item.loan_id)}
-                >
-                  <Text style={styles.expandBtnText}>
-                    {t.loans.payments} {isExpanded ? '▲' : '▼'}
+                <Pressable style={[s.actionChip, { backgroundColor: C.surfaceUp, borderColor: C.border }]} onPress={() => toggleExpand(item.loan_id)}>
+                  {isExpanded
+                    ? <ChevronUp size={13} color={C.textSec} strokeWidth={2.5} />
+                    : <ChevronDown size={13} color={C.textSec} strokeWidth={2.5} />
+                  }
+                  <Text style={[s.actionChipText, { color: C.textSec }]}>{t.loans.payments}</Text>
+                </Pressable>
+                <Pressable style={[s.actionChip, { backgroundColor: C.accentBg, borderColor: C.accent + '44' }]} onPress={() => openEditLoan(item)}>
+                  <Text style={[s.actionChipText, { color: C.accent }]}>{t.common.edit}</Text>
+                </Pressable>
+                <Pressable style={[s.actionChip, { backgroundColor: isPaid ? C.surfaceUp : C.incomeBg, borderColor: isPaid ? C.border : C.income + '44' }]} onPress={() => handleTogglePaid(item)}>
+                  <Text style={[s.actionChipText, { color: isPaid ? C.textSec : C.income }]}>
+                    {isPaid ? t.loans.markPending : t.loans.markPaid}
                   </Text>
                 </Pressable>
-                <Pressable style={styles.editBtn} onPress={() => openEditLoan(item)}>
-                  <Text style={styles.editBtnText}>{t.common.edit}</Text>
-                </Pressable>
-                {!isPaid && (
-                  <Pressable style={styles.markPaidBtn} onPress={() => handleTogglePaid(item)}>
-                    <Text style={styles.markPaidText}>{t.loans.markPaid}</Text>
-                  </Pressable>
-                )}
-                {isPaid && item.is_paid === 1 && (
-                  <Pressable style={styles.markPaidBtn} onPress={() => handleTogglePaid(item)}>
-                    <Text style={styles.markPaidText}>{t.loans.markPending}</Text>
-                  </Pressable>
-                )}
-                <Pressable onPress={() => handleDeleteLoan(item)}>
-                  <Text style={styles.deleteBtnText}>{t.common.delete}</Text>
+                <Pressable onPress={() => handleDeleteLoan(item)} hitSlop={8}>
+                  <Trash2 size={15} color={C.expense} />
                 </Pressable>
               </View>
 
               {/* Payments list */}
               {isExpanded && (
-                <View style={styles.paymentsList}>
+                <View style={s.paymentsList}>
                   {loanPayments.length === 0 ? (
-                    <Text style={styles.noPaymentsText}>{t.loans.noPayments}</Text>
+                    <Text style={s.noPaymentsText}>{t.loans.noPayments}</Text>
                   ) : (
                     loanPayments.map(pay => (
-                      <View key={pay.payment_id} style={styles.paymentRow}>
-                        <View style={styles.paymentDot} />
+                      <View key={pay.payment_id} style={s.paymentRow}>
+                        <View style={[s.paymentDot, { backgroundColor: C.income }]} />
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.paymentDate}>{isoToDisplay(pay.date)}</Text>
-                          {pay.notes ? <Text style={styles.paymentNotes}>{pay.notes}</Text> : null}
+                          <Text style={s.paymentDate}>{isoToDisplay(pay.date)}</Text>
+                          {pay.notes ? <Text style={s.paymentNotes}>{pay.notes}</Text> : null}
                         </View>
-                        <Text style={styles.paymentAmount}>+${pay.amount.toFixed(2)}</Text>
+                        <Text style={[s.paymentAmount, { color: C.income }]}>+{fmt(pay.amount)}</Text>
                         <Pressable onPress={() => handleDeletePayment(pay, item.loan_id)} hitSlop={8} style={{ paddingLeft: 8 }}>
-                          <Text style={styles.deleteBtnText}>✕</Text>
+                          <Trash2 size={13} color={C.textDim} />
                         </Pressable>
                       </View>
                     ))
@@ -322,101 +334,106 @@ export default function PersonDetail() {
           );
         }}
         ListEmptyComponent={() => (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>{t.loans.emptyLoans}</Text>
+          <View style={s.emptyContainer}>
+            <Text style={s.emptyText}>{t.loans.emptyLoans}</Text>
           </View>
         )}
       />
 
-      <Pressable style={styles.fab} onPress={openCreateLoan}>
-        <Plus size={24} color="#fff" />
+      <Pressable style={[s.fab, isWide && s.fabWide]} onPress={openCreateLoan}>
+        <Plus size={24} color="#fff" strokeWidth={2.5} />
       </Pressable>
 
       {/* Loan modal */}
       <Modal animationType="slide" transparent visible={!!loanModal} onRequestClose={() => setLoanModal(null)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>
+        <View style={overlayStyle}>
+          <View style={sheetStyle}>
+            <View style={s.handle} />
+            <Text style={s.sheetTitle}>
               {loanModal?.mode === 'edit' ? t.common.edit : t.loans.addLoan}
             </Text>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.fieldLabel}>{t.loans.description} <Text style={styles.required}>{t.common.required}</Text></Text>
-              <TextInput style={styles.input} placeholder={t.loans.descriptionPlaceholder}
-                value={desc} onChangeText={setDesc} placeholderTextColor="#C7C7CC" />
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <View style={s.sheetContent}>
+                <Text style={s.fieldLabel}>{t.loans.description} <Text style={{ color: C.expense }}>*</Text></Text>
+                <TextInput style={s.input} placeholder={t.loans.descriptionPlaceholder}
+                  value={desc} onChangeText={setDesc} placeholderTextColor={C.textDim} />
 
-              <Text style={styles.fieldLabel}>{t.loans.amount} <Text style={styles.required}>{t.common.required}</Text></Text>
-              <TextInput style={styles.input} placeholder="0.00" value={amount}
-                onChangeText={setAmount} keyboardType="decimal-pad" placeholderTextColor="#C7C7CC" />
+                <Text style={s.fieldLabel}>{t.loans.amount} <Text style={{ color: C.expense }}>*</Text></Text>
+                <TextInput style={s.input} placeholder="0.00" value={amount}
+                  onChangeText={setAmount} keyboardType="decimal-pad" placeholderTextColor={C.textDim} />
 
-              <Text style={styles.fieldLabel}>{t.loans.date} <Text style={styles.required}>{t.common.required}</Text></Text>
-              <TextInput style={styles.input} placeholder={t.expenses.datePlaceholder} value={date}
-                onChangeText={v => formatDateInput(v, setDate)}
-                keyboardType={Platform.OS === 'web' ? 'default' : 'numeric'} maxLength={10} placeholderTextColor="#C7C7CC" />
+                <Text style={s.fieldLabel}>{t.loans.date} <Text style={{ color: C.expense }}>*</Text></Text>
+                <TextInput style={s.input} placeholder={t.expenses.datePlaceholder} value={date}
+                  onChangeText={v => formatDateInput(v, setDate)}
+                  keyboardType={Platform.OS === 'web' ? 'default' : 'numeric'} maxLength={10} placeholderTextColor={C.textDim} />
 
-              <Text style={styles.fieldLabel}>{t.loans.interestRate}</Text>
-              <TextInput style={styles.input} placeholder="0" value={interestRate}
-                onChangeText={setInterestRate} keyboardType="decimal-pad" placeholderTextColor="#C7C7CC" />
-              <Text style={styles.interestHint}>
-                {previewAmt > 0 && previewRate > 0
-                  ? `$${previewAmt.toFixed(2)} × ${previewRate}% = $${previewInterest.toFixed(2)} de interés`
-                  : `Ej: $1000 × 10% → $1000 × 0.10 = $100 de interés`}
-              </Text>
+                <Text style={s.fieldLabel}>{t.loans.interestRate}</Text>
+                <TextInput style={s.input} placeholder="0" value={interestRate}
+                  onChangeText={setInterestRate} keyboardType="decimal-pad" placeholderTextColor={C.textDim} />
+                <Text style={s.interestHint}>
+                  {previewAmt > 0 && previewRate > 0
+                    ? `${fmt(previewAmt)} × ${previewRate}% = ${fmt(previewInterest)} de interés`
+                    : `Ej: $1000 × 10% → $100 de interés`}
+                </Text>
 
-              {showPreview && (
-                <View style={styles.previewBox}>
-                  <Text style={styles.previewLabel}>{t.loans.estimatedTotal}</Text>
-                  <Text style={styles.previewValue}>${previewTotal.toFixed(2)}</Text>
-                  <Text style={styles.previewDetail}>${previewAmt.toFixed(2)} + ${previewInterest.toFixed(2)} de interés</Text>
+                {showPreview && (
+                  <View style={s.previewBox}>
+                    <Text style={s.previewLabel}>{t.loans.estimatedTotal}</Text>
+                    <Text style={[s.previewValue, { color: C.warn }]}>{fmt(previewTotal)}</Text>
+                    <Text style={s.previewDetail}>{fmt(previewAmt)} + {fmt(previewInterest)} de interés</Text>
+                  </View>
+                )}
+
+                <View style={s.btnRow}>
+                  <Pressable style={[s.btn, s.btnCancel]} onPress={() => setLoanModal(null)}>
+                    <Text style={s.btnCancelText}>{t.common.cancel}</Text>
+                  </Pressable>
+                  <Pressable style={[s.btn, s.btnSave]} onPress={handleSaveLoan}>
+                    <Text style={s.btnSaveText}>{t.common.save}</Text>
+                  </Pressable>
                 </View>
-              )}
+              </View>
             </ScrollView>
-
-            <View style={styles.buttonContainer}>
-              <Pressable style={[styles.button, styles.buttonCancel]} onPress={() => setLoanModal(null)}>
-                <Text style={styles.textCancel}>{t.common.cancel}</Text>
-              </Pressable>
-              <Pressable style={[styles.button, styles.buttonSave]} onPress={handleSaveLoan}>
-                <Text style={styles.textSave}>{t.common.save}</Text>
-              </Pressable>
-            </View>
           </View>
         </View>
       </Modal>
 
       {/* Payment modal */}
       <Modal animationType="slide" transparent visible={!!paymentModal} onRequestClose={() => setPaymentModal(null)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>{t.loans.addPayment}</Text>
-            {paymentModal && (
-              <View style={styles.paymentContext}>
-                <Text style={styles.paymentContextLoan}>{paymentModal.loan.description}</Text>
-                <Text style={styles.paymentContextBalance}>
-                  {t.loans.outstanding}: ${Math.max(0, calcTotal(paymentModal.loan.amount, paymentModal.loan.interest_rate) - paymentModal.loan.total_paid).toFixed(2)}
-                </Text>
+        <View style={overlayStyle}>
+          <View style={sheetStyle}>
+            <View style={s.handle} />
+            <Text style={s.sheetTitle}>{t.loans.addPayment}</Text>
+            <View style={s.sheetContent}>
+              {paymentModal && (
+                <View style={s.paymentContext}>
+                  <Text style={s.paymentContextLoan}>{paymentModal.loan.description}</Text>
+                  <Text style={[s.paymentContextBalance, { color: C.warn }]}>
+                    {t.loans.outstanding}: {fmt(Math.max(0, calcTotal(paymentModal.loan.amount, paymentModal.loan.interest_rate) - (paymentModal.loan.total_paid ?? 0)))}
+                  </Text>
+                </View>
+              )}
+              <Text style={s.fieldLabel}>{t.loans.paymentAmount} <Text style={{ color: C.expense }}>*</Text></Text>
+              <TextInput style={s.input} placeholder="0.00" value={payAmount}
+                onChangeText={setPayAmount} keyboardType="decimal-pad" placeholderTextColor={C.textDim} />
+
+              <Text style={s.fieldLabel}>{t.loans.date} <Text style={{ color: C.expense }}>*</Text></Text>
+              <TextInput style={s.input} placeholder={t.expenses.datePlaceholder} value={payDate}
+                onChangeText={v => formatDateInput(v, setPayDate)}
+                keyboardType={Platform.OS === 'web' ? 'default' : 'numeric'} maxLength={10} placeholderTextColor={C.textDim} />
+
+              <Text style={s.fieldLabel}>{t.expenses.notes}</Text>
+              <TextInput style={[s.input, s.textArea]} placeholder={t.expenses.notesPlaceholder}
+                value={payNotes} onChangeText={setPayNotes} multiline placeholderTextColor={C.textDim} />
+
+              <View style={s.btnRow}>
+                <Pressable style={[s.btn, s.btnCancel]} onPress={() => setPaymentModal(null)}>
+                  <Text style={s.btnCancelText}>{t.common.cancel}</Text>
+                </Pressable>
+                <Pressable style={[s.btn, { backgroundColor: C.income }]} onPress={handleSavePayment}>
+                  <Text style={s.btnSaveText}>{t.common.save}</Text>
+                </Pressable>
               </View>
-            )}
-
-            <Text style={styles.fieldLabel}>{t.loans.paymentAmount} <Text style={styles.required}>{t.common.required}</Text></Text>
-            <TextInput style={styles.input} placeholder="0.00" value={payAmount}
-              onChangeText={setPayAmount} keyboardType="decimal-pad" placeholderTextColor="#C7C7CC" />
-
-            <Text style={styles.fieldLabel}>{t.loans.date} <Text style={styles.required}>{t.common.required}</Text></Text>
-            <TextInput style={styles.input} placeholder={t.expenses.datePlaceholder} value={payDate}
-              onChangeText={v => formatDateInput(v, setPayDate)}
-              keyboardType={Platform.OS === 'web' ? 'default' : 'numeric'} maxLength={10} placeholderTextColor="#C7C7CC" />
-
-            <Text style={styles.fieldLabel}>{t.expenses.notes}</Text>
-            <TextInput style={[styles.input, styles.textArea]} placeholder={t.expenses.notesPlaceholder}
-              value={payNotes} onChangeText={setPayNotes} multiline placeholderTextColor="#C7C7CC" />
-
-            <View style={styles.buttonContainer}>
-              <Pressable style={[styles.button, styles.buttonCancel]} onPress={() => setPaymentModal(null)}>
-                <Text style={styles.textCancel}>{t.common.cancel}</Text>
-              </Pressable>
-              <Pressable style={[styles.button, styles.buttonSave]} onPress={handleSavePayment}>
-                <Text style={styles.textSave}>{t.common.save}</Text>
-              </Pressable>
             </View>
           </View>
         </View>
@@ -425,107 +442,120 @@ export default function PersonDetail() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.bg },
 
   summaryCard: {
-    flexDirection: 'row',
-    marginHorizontal: 16, marginTop: 16, marginBottom: 12,
-    backgroundColor: '#fff', borderRadius: 14, padding: 16,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.surface, borderRadius: R.md,
+    marginHorizontal: S.lg, marginTop: S.lg, marginBottom: S.xs,
+    padding: S.lg, borderWidth: 1, borderColor: C.border,
   },
   summaryItem: { flex: 1, alignItems: 'center' },
-  summaryDivider: { width: 1, backgroundColor: '#E5E5EA', marginVertical: 2 },
-  summaryLabel: { fontSize: 11, color: '#8E8E93', marginBottom: 4, textAlign: 'center' },
-  summaryValue: { fontSize: 16, fontWeight: '700' },
-  loanedColor: { color: '#007AFF' },
-  pendingColor: { color: '#FF9500' },
-  paidColor: { color: '#34C759' },
+  summaryDivider: { width: 1, height: 36, backgroundColor: C.border },
+  summaryLabel: { fontSize: F.xs, color: C.textDim, fontWeight: '500', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5, textAlign: 'center' },
+  summaryValue: { fontSize: F.lg, fontWeight: '800' },
 
-  listContent: { paddingBottom: 100, paddingHorizontal: 16, gap: 10 },
-  emptyContainer: { alignItems: 'center', marginTop: 60 },
-  emptyText: { fontSize: 16, color: '#8E8E93' },
+  listContent: { paddingHorizontal: S.lg, paddingTop: S.xs, paddingBottom: 100, gap: S.sm },
+  emptyContainer: { alignItems: 'center', marginTop: 64 },
+  emptyText: { fontSize: F.base, color: C.textDim },
 
   loanCard: {
-    backgroundColor: '#fff', borderRadius: 14,
-    overflow: 'hidden',
+    backgroundColor: C.surface, borderRadius: R.md,
+    borderWidth: 1, borderColor: C.border, overflow: 'hidden',
   },
-  loanRow: { flexDirection: 'row', padding: 14 },
-  statusBar: { width: 4, borderRadius: 2, marginRight: 12, alignSelf: 'stretch', minHeight: 40 },
+  loanCardPaid: { borderColor: C.income + '33' },
+
+  // Top accent strip on paid loans (replaces banned left-stripe)
+  paidTopStrip: { height: 2, backgroundColor: C.income + '66' },
+
+  loanHeader: { flexDirection: 'row', alignItems: 'flex-start', padding: S.md, gap: S.sm },
+  loanStatusDot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 },
+  loanStatusDotInner: { width: 8, height: 8, borderRadius: 4 },
   loanInfo: { flex: 1 },
-  loanDesc: { fontSize: 15, fontWeight: '600', color: '#000' },
-  loanDate: { fontSize: 12, color: '#8E8E93', marginTop: 2 },
-  interestLabel: { fontSize: 11, color: '#8E8E93', marginTop: 3 },
+  loanDesc: { fontSize: F.base, fontWeight: '600', color: C.text },
+  loanDate: { fontSize: F.xs, color: C.textDim, marginTop: 2 },
+  interestLabel: { fontSize: F.xs, color: C.textSec, marginTop: 3 },
   loanRight: { alignItems: 'flex-end', gap: 2 },
-  loanAmountOriginal: { fontSize: 15, fontWeight: '600', color: '#333' },
-  loanTotal: { fontSize: 11, color: '#8E8E93' },
-  loanPaidAmount: { fontSize: 11, color: '#34C759', fontWeight: '600' },
-  loanOutstanding: { fontSize: 16, fontWeight: '800' },
+  loanAmountOriginal: { fontSize: F.base, fontWeight: '700', color: C.text },
+  loanTotal: { fontSize: F.xs, color: C.textSec },
+  loanPaidAmount: { fontSize: F.xs, fontWeight: '600' },
+  loanOutstanding: { fontSize: F.md, fontWeight: '800' },
 
   loanActions: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center',
-    paddingHorizontal: 14, paddingBottom: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#F2F2F7',
-    paddingTop: 10,
+    flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center',
+    paddingHorizontal: S.md, paddingVertical: S.sm,
+    borderTopWidth: 1, borderTopColor: C.borderFaint,
   },
-  abonoBtn: { backgroundColor: '#34C759', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  abonoBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
-  expandBtn: { backgroundColor: '#F2F2F7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  expandBtnText: { fontSize: 12, fontWeight: '600', color: '#333' },
-  editBtn: { paddingHorizontal: 6, paddingVertical: 4 },
-  editBtnText: { fontSize: 12, fontWeight: '600', color: '#007AFF' },
-  markPaidBtn: { paddingHorizontal: 6, paddingVertical: 4 },
-  markPaidText: { fontSize: 12, fontWeight: '600', color: '#8E8E93' },
-  deleteBtnText: { fontSize: 12, fontWeight: '600', color: '#FF3B30' },
+  actionChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: R.sm, borderWidth: 1,
+  },
+  actionChipText: { fontSize: F.xs, fontWeight: '700' },
 
   paymentsList: {
-    backgroundColor: '#F9F9F9', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E5E5EA',
-    paddingHorizontal: 14, paddingVertical: 10, gap: 8,
+    backgroundColor: C.surfaceUp, borderTopWidth: 1, borderTopColor: C.borderFaint,
+    paddingHorizontal: S.md, paddingVertical: S.sm, gap: S.xs,
   },
-  noPaymentsText: { fontSize: 13, color: '#8E8E93', textAlign: 'center', paddingVertical: 4 },
-  paymentRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  paymentDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#34C759' },
-  paymentDate: { fontSize: 13, color: '#333', fontWeight: '500' },
-  paymentNotes: { fontSize: 11, color: '#8E8E93' },
-  paymentAmount: { fontSize: 13, fontWeight: '700', color: '#34C759' },
+  noPaymentsText: { fontSize: F.sm, color: C.textDim, textAlign: 'center', paddingVertical: 4 },
+  paymentRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingVertical: 4 },
+  paymentDot: { width: 6, height: 6, borderRadius: 3 },
+  paymentDate: { fontSize: F.sm, color: C.text, fontWeight: '500' },
+  paymentNotes: { fontSize: F.xs, color: C.textSec },
+  paymentAmount: { fontSize: F.sm, fontWeight: '700' },
 
   fab: {
-    position: 'absolute', right: 16, bottom: 32,
+    position: 'absolute', right: 20, bottom: 28,
     width: 56, height: 56, borderRadius: 28,
-    backgroundColor: '#007AFF', alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5,
+    backgroundColor: C.accent,
+    alignItems: 'center', justifyContent: 'center',
+    ...shadow.lg,
   },
+  fabWide: { right: 32, bottom: 32 },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContainer: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, maxHeight: '85%' },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#000', textAlign: 'center', marginBottom: 16 },
+  // Sheet modals
+  overlay: { flex: 1, backgroundColor: C.scrim, justifyContent: 'flex-end' },
+  overlayDesktop: { justifyContent: 'center', alignItems: 'center' },
+  sheet: {
+    backgroundColor: C.surface,
+    borderTopLeftRadius: R.xl, borderTopRightRadius: R.xl,
+    paddingTop: 12,
+    borderTopWidth: 1, borderColor: C.border,
+    maxHeight: '85%',
+  },
+  sheetDesktop: { borderRadius: R.xl, maxWidth: FORM_MAX_W, width: '100%', borderWidth: 1, maxHeight: '90%' },
+  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: C.border, alignSelf: 'center', marginBottom: 12 },
+  sheetTitle: { fontSize: F.lg, fontWeight: '700', color: C.text, textAlign: 'center', marginBottom: 4, paddingHorizontal: 24 },
+  sheetContent: { paddingHorizontal: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24 },
 
   paymentContext: {
-    backgroundColor: '#F2F2F7', borderRadius: 10, padding: 12, marginBottom: 8,
+    backgroundColor: C.surfaceUp, borderRadius: R.sm, padding: S.md, marginBottom: S.xs,
+    borderWidth: 1, borderColor: C.border,
   },
-  paymentContextLoan: { fontSize: 14, fontWeight: '600', color: '#000' },
-  paymentContextBalance: { fontSize: 13, color: '#FF9500', fontWeight: '700', marginTop: 2 },
+  paymentContextLoan: { fontSize: F.sm, fontWeight: '600', color: C.text },
+  paymentContextBalance: { fontSize: F.sm, fontWeight: '700', marginTop: 2 },
 
-  interestHint: { fontSize: 12, color: '#8E8E93', marginTop: 6, fontStyle: 'italic' },
+  interestHint: { fontSize: F.xs, color: C.textSec, marginTop: 6, fontStyle: 'italic' },
   previewBox: {
-    marginTop: 16, backgroundColor: '#FFF3E0', borderRadius: 12,
-    padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#FFE0B2',
+    marginTop: S.md, backgroundColor: C.warnBg, borderRadius: R.sm,
+    padding: S.md, alignItems: 'center', borderWidth: 1, borderColor: C.warn + '44',
   },
-  previewLabel: { fontSize: 12, color: '#8E8E93', marginBottom: 4 },
-  previewValue: { fontSize: 22, fontWeight: '800', color: '#FF9500' },
-  previewDetail: { fontSize: 12, color: '#8E8E93', marginTop: 4 },
+  previewLabel: { fontSize: F.xs, color: C.textSec, marginBottom: 4 },
+  previewValue: { fontSize: F.xl, fontWeight: '800' },
+  previewDetail: { fontSize: F.xs, color: C.textSec, marginTop: 4 },
 
-  fieldLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginTop: 14, marginBottom: 6 },
-  required: { color: '#FF3B30' },
+  fieldLabel: { fontSize: F.sm, fontWeight: '600', color: C.textSec, marginTop: S.lg, marginBottom: 6 },
   input: {
-    borderWidth: 1, borderColor: '#E5E5EA', borderRadius: 10,
-    paddingHorizontal: 14, paddingVertical: 10, fontSize: 16, color: '#000', backgroundColor: '#F9F9F9',
+    backgroundColor: C.surfaceUp, borderWidth: 1, borderColor: C.border,
+    borderRadius: R.sm, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: F.base, color: C.text,
   },
-  textArea: { height: 70, textAlignVertical: 'top' },
-
-  buttonContainer: { flexDirection: 'row', gap: 10, marginTop: 20 },
-  button: { flex: 1, paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
-  buttonCancel: { backgroundColor: '#E5E5EA' },
-  buttonSave: { backgroundColor: '#007AFF' },
-  textCancel: { fontSize: 16, fontWeight: '600', color: '#000' },
-  textSave: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  textArea: { height: 70, textAlignVertical: 'top', paddingTop: 10 },
+  btnRow: { flexDirection: 'row', gap: S.sm, marginTop: S.xl },
+  btn: { flex: 1, paddingVertical: 14, borderRadius: R.sm, alignItems: 'center' },
+  btnCancel: { backgroundColor: C.surfaceUp },
+  btnSave: { backgroundColor: C.accent },
+  btnCancelText: { fontSize: F.base, fontWeight: '600', color: C.textSec },
+  btnSaveText: { fontSize: F.base, fontWeight: '700', color: '#fff' },
 });

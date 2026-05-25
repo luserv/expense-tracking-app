@@ -1,32 +1,82 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { Platform, StyleSheet, View } from 'react-native';
+import SidebarNav from '../../components/SidebarNav';
 import { useI18n } from '../../utils/i18n';
+import { SIDEBAR_W, useLayout } from '../../utils/responsive';
+import { C } from '../../utils/theme';
+
+function TabIcon({ name, focused }: { name: React.ComponentProps<typeof Ionicons>['name']; focused: boolean }) {
+  return (
+    <View style={[ic.wrap, focused && ic.wrapActive]}>
+      <Ionicons name={name} size={22} color={focused ? C.accent : C.textDim} />
+    </View>
+  );
+}
+
+const ic = StyleSheet.create({
+  wrap:       { width: 42, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  wrapActive: { backgroundColor: C.accentBg },
+});
 
 export default function TabsLayout() {
   const { t } = useI18n();
+  const { isDesktop } = useLayout();
 
-  return (
-    <Tabs>
+  const BAR_H = Platform.OS === 'ios' ? 88 : 64;
+
+  const tabs = (
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: isDesktop
+          ? { display: 'none' }
+          : {
+              backgroundColor: C.surface,
+              borderTopWidth: 1,
+              borderTopColor: C.border,
+              height: BAR_H,
+              paddingBottom: Platform.OS === 'ios' ? 28 : 10,
+              paddingTop: 6,
+              elevation: 0,
+            },
+        tabBarActiveTintColor: C.accent,
+        tabBarInactiveTintColor: C.textDim,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+        tabBarItemStyle: { paddingTop: 4 },
+      }}
+    >
       <Tabs.Screen name="index" options={{
-        headerTitle: t.tabs.expenses,
-        tabBarLabel: t.tabs.expenses,
-        tabBarIcon: ({ color, size }) => <Ionicons name="wallet-outline" size={size} color={color} />,
+        title: t.tabs.expenses,
+        tabBarIcon: ({ focused }) => <TabIcon name="wallet-outline" focused={focused} />,
       }} />
       <Tabs.Screen name="stats" options={{
-        headerTitle: t.tabs.stats,
-        tabBarLabel: t.tabs.stats,
-        tabBarIcon: ({ color, size }) => <Ionicons name="bar-chart-outline" size={size} color={color} />,
+        title: t.tabs.stats,
+        tabBarIcon: ({ focused }) => <TabIcon name="bar-chart-outline" focused={focused} />,
+      }} />
+      <Tabs.Screen name="budgets" options={{
+        title: t.tabs.budgets,
+        tabBarIcon: ({ focused }) => <TabIcon name="pie-chart-outline" focused={focused} />,
       }} />
       <Tabs.Screen name="loans" options={{
-        headerTitle: t.tabs.loans,
-        tabBarLabel: t.tabs.loans,
-        tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} />,
+        title: t.tabs.loans,
+        tabBarIcon: ({ focused }) => <TabIcon name="people-outline" focused={focused} />,
       }} />
       <Tabs.Screen name="config" options={{
-        headerTitle: t.tabs.config,
-        tabBarLabel: t.tabs.config,
-        tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" size={size} color={color} />,
+        title: t.tabs.config,
+        tabBarIcon: ({ focused }) => <TabIcon name="settings-outline" focused={focused} />,
       }} />
     </Tabs>
   );
+
+  if (isDesktop) {
+    return (
+      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: C.bg }}>
+        <SidebarNav />
+        <View style={{ flex: 1 }}>{tabs}</View>
+      </View>
+    );
+  }
+
+  return tabs;
 }
