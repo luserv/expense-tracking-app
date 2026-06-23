@@ -14,14 +14,15 @@
     "generate:ico": "node scripts/generate-ico.mjs",
     "electron:rebuild": "electron-rebuild -f -w better-sqlite3",
     "electron:dev": "cross-env NODE_ENV=development electron electron/main.js",
-    "electron:build": "expo export --platform web --output-dir dist && electron-builder --config electron-builder.json",
-    "electron:win": "expo export --platform web --output-dir dist && electron-builder --win --config electron-builder.json",
-    "electron:mac": "expo export --platform web --output-dir dist && electron-builder --mac --config electron-builder.json",
-    "electron:linux": "expo export --platform web --output-dir dist && electron-builder --linux --config electron-builder.json"
+    "electron:build": "expo export --platform web --output-dir dist && node electron/fix-assets.js && electron-builder --config electron-builder.json",
+    "electron:win": "expo export --platform web --output-dir dist && node electron/fix-assets.js && electron-builder --win --config electron-builder.json",
+    "electron:mac": "expo export --platform web --output-dir dist && node electron/fix-assets.js && electron-builder --mac --config electron-builder.json",
+    "electron:linux": "expo export --platform web --output-dir dist && node electron/fix-assets.js && electron-builder --linux --config electron-builder.json"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-google-signin/google-signin": "^16.1.2",
     "@react-navigation/bottom-tabs": "^7.3.10",
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.1.6",
@@ -40,6 +41,7 @@
     "expo-image": "~3.0.11",
     "expo-linking": "~8.0.11",
     "expo-notifications": "~0.32.16",
+    "expo-print": "~15.0.8",
     "expo-router": "~6.0.23",
     "expo-secure-store": "~15.0.8",
     "expo-sharing": "~14.0.8",

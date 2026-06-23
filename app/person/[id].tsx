@@ -2,7 +2,7 @@
  * Detalle de persona / préstamos — Segato (dark theme + responsive)
  */
 import { useLocalSearchParams, useNavigation } from 'expo-router';
-import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
@@ -17,10 +17,19 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { Loan, Payment, Person, useExpenses } from '../../utils/context';
+import { DateField } from '../../components/DateField';
+import { Installment, Loan, LoanFrequency, Person, useExpenses } from '../../utils/context';
 import { useI18n } from '../../utils/i18n';
+import { buildLoanReportHtml, delayDays, exportLoanReport } from '../../utils/loanReport';
+import { computeEffectiveAmounts } from '../../utils/repo/installments';
 import { CONTENT_MAX_W, FORM_MAX_W, useLayout } from '../../utils/responsive';
 import { C, F, R, S, shadow } from '../../utils/theme';
+
+const FREQUENCIES: { value: LoanFrequency; es: string }[] = [
+  { value: 'monthly', es: 'Mensual' },
+  { value: 'biweekly', es: 'Quincenal' },
+  { value: 'weekly', es: 'Semanal' },
+];
 
 function todayIso(): string {
   const n = new Date();
@@ -46,20 +55,20 @@ function calcTotal(amount: number, rate: number): number {
 }
 
 type LoanModal = { mode: 'create' } | { mode: 'edit'; loan: Loan };
-type PaymentModal = { loan: Loan };
+type PayModal = { loan: Loan; inst: Installment; mode: 'pay' | 'edit'; cascadeFromId?: string; effectiveBalance?: number };
 
 export default function PersonDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
   const { t } = useI18n();
-  const { getPerson, getLoansByPerson, createLoan, updateLoan, updateLoanPaid, deleteLoan,
-          getPaymentsByLoan, createPayment, deletePayment } = useExpenses();
+  const { getPerson, getLoansByPerson, createLoan, updateLoan, deleteLoan,
+          getInstallments, payInstallment, payInstallmentCascade, unpayInstallment } = useExpenses();
   const l = useLayout();
   const isWide = !l.isPhone;
 
   const [person, setPerson] = useState<Person | null>(null);
   const [loans, setLoans] = useState<Loan[]>([]);
-  const [payments, setPayments] = useState<Record<string, Payment[]>>({});
+  const [installments, setInstallments] = useState<Record<string, Installment[]>>({});
   const [expandedLoan, setExpandedLoan] = useState<string | null>(null);
 
   // Loan modal
@@ -68,12 +77,14 @@ export default function PersonDetail() {
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState('');
   const [interestRate, setInterestRate] = useState('');
+  const [numInstallments, setNumInstallments] = useState('1');
+  const [frequency, setFrequency] = useState<LoanFrequency>('monthly');
+  const [firstDue, setFirstDue] = useState('');
 
-  // Payment modal
-  const [paymentModal, setPaymentModal] = useState<PaymentModal | null>(null);
+  // Pay-installment modal
+  const [payModal, setPayModal] = useState<PayModal | null>(null);
   const [payAmount, setPayAmount] = useState('');
   const [payDate, setPayDate] = useState('');
-  const [payNotes, setPayNotes] = useState('');
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -85,9 +96,9 @@ export default function PersonDetail() {
 
   useEffect(() => { load(); }, [load]);
 
-  const loadPayments = async (loanId: string) => {
-    const ps = await getPaymentsByLoan(loanId);
-    setPayments(prev => ({ ...prev, [loanId]: ps }));
+  const loadInstallments = async (loanId: string) => {
+    const ins = await getInstallments(loanId);
+    setInstallments(prev => ({ ...prev, [loanId]: ins }));
   };
 
   const toggleExpand = async (loanId: string) => {
@@ -95,7 +106,7 @@ export default function PersonDetail() {
       setExpandedLoan(null);
     } else {
       setExpandedLoan(loanId);
-      await loadPayments(loanId);
+      await loadInstallments(loanId);
     }
   };
 
@@ -109,15 +120,19 @@ export default function PersonDetail() {
 
   // Loan modal handlers
   const openCreateLoan = () => {
-    setDesc(''); setAmount(''); setDate(isoToDisplay(todayIso())); setInterestRate('');
+    setDesc(''); setAmount(''); setDate(todayIso()); setInterestRate('');
+    setNumInstallments('1'); setFrequency('monthly'); setFirstDue('');
     setLoanModal({ mode: 'create' });
   };
 
   const openEditLoan = (loan: Loan) => {
     setDesc(loan.description);
     setAmount(String(loan.amount));
-    setDate(isoToDisplay(loan.date));
+    setDate(loan.date);
     setInterestRate(loan.interest_rate > 0 ? String(loan.interest_rate) : '');
+    setNumInstallments(String(loan.months || 1));
+    setFrequency(loan.frequency ?? 'monthly');
+    setFirstDue(loan.first_due_date ?? '');
     setLoanModal({ mode: 'edit', loan });
   };
 
@@ -125,18 +140,26 @@ export default function PersonDetail() {
     if (!desc.trim()) { alert(t.loans.descriptionRequired); return; }
     const amt = parseFloat(amount.replace(',', '.'));
     if (!amt || amt <= 0) { alert(t.loans.amountRequired); return; }
-    const isoDate = displayToIso(date);
-    if (!isoDate) { alert(t.loans.dateRequired); return; }
+    const isoDate = date;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) { alert(t.loans.dateRequired); return; }
     const rate = parseFloat(interestRate.replace(',', '.')) || 0;
-    const data = { description: desc.trim(), amount: amt, date: isoDate,
-                   interest_rate: rate, interest_type: 'simple' as const, months: 1 };
-    if (loanModal?.mode === 'edit') {
-      await updateLoan(loanModal.loan.loan_id, data);
+    const n = Math.max(1, parseInt(numInstallments, 10) || 1);
+    const firstDueIso = /^\d{4}-\d{2}-\d{2}$/.test(firstDue) ? firstDue : null;
+    const data = {
+      description: desc.trim(), amount: amt, date: isoDate,
+      interest_rate: rate, interest_type: 'simple' as const,
+      months: n, frequency, first_due_date: firstDueIso,
+    };
+    const editingId = loanModal?.mode === 'edit' ? loanModal.loan.loan_id : null;
+    if (editingId) {
+      // Editar regenera el cronograma (nuevas fechas/montos), conservando lo ya pagado por cuota.
+      await updateLoan(editingId, data);
     } else {
       await createLoan({ person_id: id!, ...data });
     }
     setLoanModal(null);
     await load();
+    if (editingId && expandedLoan === editingId) await loadInstallments(editingId);
   };
 
   const handleDeleteLoan = (loan: Loan) => {
@@ -151,48 +174,67 @@ export default function PersonDetail() {
     }
   };
 
-  const handleTogglePaid = async (loan: Loan) => {
-    await updateLoanPaid(loan.loan_id, loan.is_paid === 0);
-    await load();
+  // mode 'pay' = abono en cascada (vuelca excedente a las siguientes cuotas).
+  // mode 'edit' = corregir monto/fecha SOLO de esta cuota (sin cascada).
+  const openPay = async (loan: Loan, inst: Installment, mode: 'pay' | 'edit') => {
+    const list = await getInstallments(loan.loan_id);
+    const fresh = list.find(i => i.installment_id === inst.installment_id) ?? inst;
+    if (mode === 'edit') {
+      setPayAmount(fresh.paid_amount.toFixed(2));
+      setPayDate(fresh.paid_date ?? todayIso());
+      setPayModal({ loan, inst: fresh, mode });
+    } else {
+      const today = todayIso();
+      // Monto efectivo: incluye arrastre de cuotas vencidas con pago parcial previas.
+      const effective = computeEffectiveAmounts(list, today);
+      const effInst = effective.find(i => i.installment_id === inst.installment_id) ?? fresh;
+      const loanTotal = loan.amount + loan.amount * (loan.interest_rate || 0) / 100;
+      const sumPaid = list.reduce((s, i) => s + i.paid_amount, 0);
+      const loanOutstanding = Math.max(0, Math.round((loanTotal - sumPaid) * 100) / 100);
+      const cuotaEffective = Math.max(0, Math.round((effInst.amount - fresh.paid_amount) * 100) / 100);
+      const toPayDefault = Math.min(cuotaEffective, loanOutstanding);
+      setPayAmount(toPayDefault.toFixed(2));
+      setPayDate(today);
+      // Cascada desde la primera cuota con saldo para pagar el arrastre primero.
+      const firstOutstanding = list.find(i => i.paid_amount < i.amount) ?? fresh;
+      setPayModal({ loan, inst: fresh, mode, cascadeFromId: firstOutstanding.installment_id, effectiveBalance: toPayDefault });
+    }
   };
 
-  // Payment modal handlers
-  const openPaymentModal = (loan: Loan) => {
-    setPayAmount(''); setPayDate(isoToDisplay(todayIso())); setPayNotes('');
-    setPaymentModal({ loan });
-  };
-
-  const handleSavePayment = async () => {
-    if (!paymentModal) return;
+  const handlePay = async () => {
+    if (!payModal) return;
     const amt = parseFloat(payAmount.replace(',', '.'));
     if (!amt || amt <= 0) { alert(t.loans.amountRequired); return; }
-    const isoDate = displayToIso(payDate);
-    if (!isoDate) { alert(t.loans.dateRequired); return; }
-    await createPayment({
-      loan_id: paymentModal.loan.loan_id,
-      amount: amt,
-      date: isoDate,
-      notes: payNotes.trim() || null,
-    });
-    setPaymentModal(null);
+    const isoDate = payDate;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) { alert(t.loans.dateRequired); return; }
+    if (payModal.mode === 'pay') {
+      await payInstallmentCascade(payModal.cascadeFromId ?? payModal.inst.installment_id, amt, isoDate);
+    } else {
+      await payInstallment(payModal.inst.installment_id, amt, isoDate);
+    }
+    const loanId = payModal.loan.loan_id;
+    setPayModal(null);
     await load();
-    await loadPayments(paymentModal.loan.loan_id);
-    if (expandedLoan !== paymentModal.loan.loan_id) setExpandedLoan(paymentModal.loan.loan_id);
+    await loadInstallments(loanId);
+    if (expandedLoan !== loanId) setExpandedLoan(loanId);
   };
 
-  const handleDeletePayment = (pay: Payment, loanId: string) => {
-    const doDelete = async () => {
-      await deletePayment(pay.payment_id);
-      await load();
-      await loadPayments(loanId);
-    };
-    if (Platform.OS === 'web') {
-      if (confirm(t.loans.deleteConfirm)) doDelete();
-    } else {
-      Alert.alert(t.common.delete, t.loans.deleteConfirm, [
-        { text: t.common.cancel, style: 'cancel' },
-        { text: t.common.delete, style: 'destructive', onPress: doDelete },
-      ]);
+  const handleClearInstallment = async (loan: Loan, inst: Installment) => {
+    await unpayInstallment(inst.installment_id);
+    await load();
+    await loadInstallments(loan.loan_id);
+  };
+
+  const handleReport = async (loan: Loan) => {
+    if (!person) return;
+    try {
+      const ins = await getInstallments(loan.loan_id);
+      const html = buildLoanReportHtml(person, loan, ins);
+      await exportLoanReport(html, `prestamo-${person.name}-${loan.description}`.replace(/\s+/g, '_'));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (Platform.OS === 'web') alert('Error al generar el reporte: ' + msg);
+      else Alert.alert('Error', 'No se pudo generar el reporte: ' + msg);
     }
   };
 
@@ -201,6 +243,11 @@ export default function PersonDetail() {
   const previewInterest = previewAmt * (previewRate / 100);
   const previewTotal = previewAmt + previewInterest;
   const showPreview = previewAmt > 0 && previewRate > 0;
+  const freqLabels: Record<LoanFrequency, string> = {
+    monthly: t.loans.freqMonthly, biweekly: t.loans.freqBiweekly, weekly: t.loans.freqWeekly,
+  };
+  const nInst = Math.max(1, parseInt(numInstallments, 10) || 1);
+  const perInstallment = previewTotal / nInst;
 
   const totalLoaned  = loans.reduce((s, l) => s + calcTotal(l.amount, l.interest_rate), 0);
   const totalAbonado = loans.reduce((s, l) => s + (l.total_paid ?? 0), 0);
@@ -247,12 +294,11 @@ export default function PersonDetail() {
           const outstanding = Math.max(0, total - (item.total_paid ?? 0));
           const hasInterest = item.interest_rate > 0;
           const isPaid = item.is_paid === 1 || outstanding <= 0;
-          const loanPayments = payments[item.loan_id] ?? [];
+          const loanInstallments = installments[item.loan_id] ?? [];
           const isExpanded = expandedLoan === item.loan_id;
 
           return (
             <View style={[s.loanCard, isPaid && s.loanCardPaid]}>
-              {/* Paid indicator strip — top border accent instead of side stripe */}
               {isPaid && <View style={s.paidTopStrip} />}
 
               {/* Header */}
@@ -262,10 +308,10 @@ export default function PersonDetail() {
                 </View>
                 <View style={s.loanInfo}>
                   <Text style={s.loanDesc}>{item.description}</Text>
-                  <Text style={s.loanDate}>{isoToDisplay(item.date)}</Text>
+                  <Text style={s.loanDate}>{isoToDisplay(item.date)} · {item.months || 1} {t.loans.installmentsShort}</Text>
                   {hasInterest && (
                     <Text style={s.interestLabel}>
-                      {item.interest_rate}% → {fmt(item.amount)} × 0.{String(item.interest_rate).replace('.', '')} = {fmt(item.amount * item.interest_rate / 100)}
+                      {item.interest_rate}% · {fmt(item.amount * item.interest_rate / 100)} {t.loans.interestWord}
                     </Text>
                   )}
                 </View>
@@ -285,48 +331,101 @@ export default function PersonDetail() {
 
               {/* Actions */}
               <View style={s.loanActions}>
-                <Pressable style={[s.actionChip, { backgroundColor: C.incomeBg, borderColor: C.income + '44' }]} onPress={() => openPaymentModal(item)}>
-                  <Text style={[s.actionChipText, { color: C.income }]}>+ {t.loans.payment}</Text>
-                </Pressable>
                 <Pressable style={[s.actionChip, { backgroundColor: C.surfaceUp, borderColor: C.border }]} onPress={() => toggleExpand(item.loan_id)}>
                   {isExpanded
-                    ? <ChevronUp size={13} color={C.textSec} strokeWidth={2.5} />
-                    : <ChevronDown size={13} color={C.textSec} strokeWidth={2.5} />
-                  }
-                  <Text style={[s.actionChipText, { color: C.textSec }]}>{t.loans.payments}</Text>
+                    ? <Ionicons name="chevron-up-outline" size={13} color={C.textSec} />
+                    : <Ionicons name="chevron-down-outline" size={13} color={C.textSec} />}
+                  <Text style={[s.actionChipText, { color: C.textSec }]}>{t.loans.installments}</Text>
                 </Pressable>
                 <Pressable style={[s.actionChip, { backgroundColor: C.accentBg, borderColor: C.accent + '44' }]} onPress={() => openEditLoan(item)}>
                   <Text style={[s.actionChipText, { color: C.accent }]}>{t.common.edit}</Text>
                 </Pressable>
-                <Pressable style={[s.actionChip, { backgroundColor: isPaid ? C.surfaceUp : C.incomeBg, borderColor: isPaid ? C.border : C.income + '44' }]} onPress={() => handleTogglePaid(item)}>
-                  <Text style={[s.actionChipText, { color: isPaid ? C.textSec : C.income }]}>
-                    {isPaid ? t.loans.markPending : t.loans.markPaid}
-                  </Text>
+                <Pressable style={[s.actionChip, { backgroundColor: C.surfaceUp, borderColor: C.border }]} onPress={() => handleReport(item)}>
+                  <Ionicons name="document-text-outline" size={13} color={C.textSec} />
+                  <Text style={[s.actionChipText, { color: C.textSec }]}>{t.loans.report}</Text>
                 </Pressable>
                 <Pressable onPress={() => handleDeleteLoan(item)} hitSlop={8}>
-                  <Trash2 size={15} color={C.expense} />
+                  <Ionicons name="trash-outline" size={15} color={C.expense} />
                 </Pressable>
               </View>
 
-              {/* Payments list */}
+              {/* Installments list */}
               {isExpanded && (
                 <View style={s.paymentsList}>
-                  {loanPayments.length === 0 ? (
-                    <Text style={s.noPaymentsText}>{t.loans.noPayments}</Text>
+                  {(() => {
+                    const today2 = todayIso();
+                    const effList = computeEffectiveAmounts(loanInstallments, today2);
+                    const next = effList.find(i => i.paid_amount < i.amount);
+                    return next ? (
+                      <Text style={s.nextDue}>
+                        {t.loans.nextDue}: {t.loans.installmentLabel} {next.number} · {isoToDisplay(next.due_date)} · {t.loans.outstanding} {fmt(next.amount - next.paid_amount)}
+                      </Text>
+                    ) : null;
+                  })()}
+                  {loanInstallments.length === 0 ? (
+                    <Text style={s.noPaymentsText}>{t.loans.noInstallments}</Text>
                   ) : (
-                    loanPayments.map(pay => (
-                      <View key={pay.payment_id} style={s.paymentRow}>
-                        <View style={[s.paymentDot, { backgroundColor: C.income }]} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={s.paymentDate}>{isoToDisplay(pay.date)}</Text>
-                          {pay.notes ? <Text style={s.paymentNotes}>{pay.notes}</Text> : null}
+                    (() => {
+                      const today2 = todayIso();
+                      const effList = computeEffectiveAmounts(loanInstallments, today2);
+                      return loanInstallments.map((inst, idx) => {
+                      const eff = effList[idx];
+                      const carry = Math.round((eff.amount - inst.amount) * 100) / 100;
+                      const displayAmt = carry > 0 ? eff.amount : inst.amount;
+                      const carryStr = carry > 0 ? ` (+${fmt(carry)} ${t.loans.carryOver})` : '';
+                      const settled = inst.paid_amount >= inst.amount;
+                      const partial = inst.paid_amount > 0 && !settled;
+                      const d = delayDays(inst.due_date, inst.paid_date);
+                      const dColor = d === null ? C.textDim : d > 0 ? C.expense : C.income;
+                      const dText = d === null ? '' : d > 0 ? `${d}${t.loans.daysLate}` : d < 0 ? `${-d}${t.loans.daysEarly}` : t.loans.onTime;
+                      const dotColor = settled ? C.income : partial ? C.warn : carry > 0 ? C.warn : C.textDim;
+                      return (
+                        <View key={inst.installment_id} style={s.instRow}>
+                          <View style={[s.instDot, { backgroundColor: dotColor + '22' }]}>
+                            <Text style={[s.instNum, { color: dotColor }]}>{inst.number}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.instDue}>{t.loans.dueOn} {isoToDisplay(inst.due_date)}</Text>
+                            <Text style={s.instMeta}>
+                              {settled
+                                ? t.loans.settled
+                                : partial
+                                  ? `${t.loans.partial} ${fmt(inst.paid_amount)}/${fmt(displayAmt)}${carryStr}`
+                                  : `${fmt(displayAmt)}${carryStr}`}
+                              {inst.paid_date ? ` · ${t.loans.paidOn} ${isoToDisplay(inst.paid_date)}` : ''}
+                              {dText ? <Text style={{ color: dColor }}>{`  ${dText}`}</Text> : null}
+                            </Text>
+                          </View>
+                          {settled ? (
+                            <View style={s.instActions}>
+                              <Pressable onPress={() => openPay(item, inst, 'edit')} hitSlop={6} style={s.instAction}>
+                                <Text style={[s.actionChipText, { color: C.accent }]}>{t.common.edit}</Text>
+                              </Pressable>
+                              <Pressable onPress={() => handleClearInstallment(item, inst)} hitSlop={6} style={s.instAction}>
+                                <Text style={[s.actionChipText, { color: C.textDim }]}>{t.loans.undo}</Text>
+                              </Pressable>
+                            </View>
+                          ) : (
+                            <View style={s.instActions}>
+                              {partial && (
+                                <>
+                                  <Pressable onPress={() => openPay(item, inst, 'edit')} hitSlop={6} style={s.instAction}>
+                                    <Text style={[s.actionChipText, { color: C.accent }]}>{t.common.edit}</Text>
+                                  </Pressable>
+                                  <Pressable onPress={() => handleClearInstallment(item, inst)} hitSlop={6} style={s.instAction}>
+                                    <Text style={[s.actionChipText, { color: C.textDim }]}>{t.loans.undo}</Text>
+                                  </Pressable>
+                                </>
+                              )}
+                              <Pressable onPress={() => openPay(item, inst, 'pay')} style={s.instPayBtn}>
+                                <Text style={[s.actionChipText, { color: C.income }]}>{t.loans.pay}</Text>
+                              </Pressable>
+                            </View>
+                          )}
                         </View>
-                        <Text style={[s.paymentAmount, { color: C.income }]}>+{fmt(pay.amount)}</Text>
-                        <Pressable onPress={() => handleDeletePayment(pay, item.loan_id)} hitSlop={8} style={{ paddingLeft: 8 }}>
-                          <Trash2 size={13} color={C.textDim} />
-                        </Pressable>
-                      </View>
-                    ))
+                      );
+                    });
+                    })()
                   )}
                 </View>
               )}
@@ -341,7 +440,7 @@ export default function PersonDetail() {
       />
 
       <Pressable style={[s.fab, isWide && s.fabWide]} onPress={openCreateLoan}>
-        <Plus size={24} color="#fff" strokeWidth={2.5} />
+        <Ionicons name="add-outline" size={24} color="#fff" />
       </Pressable>
 
       {/* Loan modal */}
@@ -363,9 +462,7 @@ export default function PersonDetail() {
                   onChangeText={setAmount} keyboardType="decimal-pad" placeholderTextColor={C.textDim} />
 
                 <Text style={s.fieldLabel}>{t.loans.date} <Text style={{ color: C.expense }}>*</Text></Text>
-                <TextInput style={s.input} placeholder={t.expenses.datePlaceholder} value={date}
-                  onChangeText={v => formatDateInput(v, setDate)}
-                  keyboardType={Platform.OS === 'web' ? 'default' : 'numeric'} maxLength={10} placeholderTextColor={C.textDim} />
+                <DateField value={date} onChange={setDate} />
 
                 <Text style={s.fieldLabel}>{t.loans.interestRate}</Text>
                 <TextInput style={s.input} placeholder="0" value={interestRate}
@@ -384,6 +481,38 @@ export default function PersonDetail() {
                   </View>
                 )}
 
+                {(
+                  <>
+                    <Text style={s.fieldLabel}>{t.loans.numInstallments}</Text>
+                    <TextInput style={s.input} placeholder="1" value={numInstallments}
+                      onChangeText={v => setNumInstallments(v.replace(/[^0-9]/g, ''))}
+                      keyboardType="number-pad" placeholderTextColor={C.textDim} />
+
+                    <Text style={s.fieldLabel}>{t.loans.frequency}</Text>
+                    <View style={s.freqRow}>
+                      {FREQUENCIES.map(f => {
+                        const active = frequency === f.value;
+                        return (
+                          <Pressable key={f.value} onPress={() => setFrequency(f.value)}
+                            style={[s.freqChip, active && s.freqChipActive]}>
+                            <Text style={[s.freqChipText, active && { color: C.accent, fontWeight: '700' }]}>
+                              {freqLabels[f.value]}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+
+                    <Text style={s.fieldLabel}>{t.loans.firstDueDate}</Text>
+                    <DateField value={firstDue} onChange={setFirstDue} />
+                    <Text style={s.interestHint}>
+                      {previewAmt > 0
+                        ? `${nInst} ${t.loans.installmentsShort} × ${fmt(perInstallment)}`
+                        : t.loans.firstDueHint}
+                    </Text>
+                  </>
+                )}
+
                 <View style={s.btnRow}>
                   <Pressable style={[s.btn, s.btnCancel]} onPress={() => setLoanModal(null)}>
                     <Text style={s.btnCancelText}>{t.common.cancel}</Text>
@@ -398,18 +527,18 @@ export default function PersonDetail() {
         </View>
       </Modal>
 
-      {/* Payment modal */}
-      <Modal animationType="slide" transparent visible={!!paymentModal} onRequestClose={() => setPaymentModal(null)}>
+      {/* Pay installment modal */}
+      <Modal animationType="slide" transparent visible={!!payModal} onRequestClose={() => setPayModal(null)}>
         <View style={overlayStyle}>
           <View style={sheetStyle}>
             <View style={s.handle} />
-            <Text style={s.sheetTitle}>{t.loans.addPayment}</Text>
+            <Text style={s.sheetTitle}>{payModal?.mode === 'edit' ? t.loans.editPayment : t.loans.payInstallment}</Text>
             <View style={s.sheetContent}>
-              {paymentModal && (
+              {payModal && (
                 <View style={s.paymentContext}>
-                  <Text style={s.paymentContextLoan}>{paymentModal.loan.description}</Text>
+                  <Text style={s.paymentContextLoan}>{payModal.loan.description} · {t.loans.installmentLabel} {payModal.inst.number}</Text>
                   <Text style={[s.paymentContextBalance, { color: C.warn }]}>
-                    {t.loans.outstanding}: {fmt(Math.max(0, calcTotal(paymentModal.loan.amount, paymentModal.loan.interest_rate) - (paymentModal.loan.total_paid ?? 0)))}
+                    {t.loans.dueOn} {isoToDisplay(payModal.inst.due_date)} · {fmt(payModal.effectiveBalance ?? Math.max(0, payModal.inst.amount - payModal.inst.paid_amount))}
                   </Text>
                 </View>
               )}
@@ -417,20 +546,15 @@ export default function PersonDetail() {
               <TextInput style={s.input} placeholder="0.00" value={payAmount}
                 onChangeText={setPayAmount} keyboardType="decimal-pad" placeholderTextColor={C.textDim} />
 
-              <Text style={s.fieldLabel}>{t.loans.date} <Text style={{ color: C.expense }}>*</Text></Text>
-              <TextInput style={s.input} placeholder={t.expenses.datePlaceholder} value={payDate}
-                onChangeText={v => formatDateInput(v, setPayDate)}
-                keyboardType={Platform.OS === 'web' ? 'default' : 'numeric'} maxLength={10} placeholderTextColor={C.textDim} />
-
-              <Text style={s.fieldLabel}>{t.expenses.notes}</Text>
-              <TextInput style={[s.input, s.textArea]} placeholder={t.expenses.notesPlaceholder}
-                value={payNotes} onChangeText={setPayNotes} multiline placeholderTextColor={C.textDim} />
+              <Text style={s.fieldLabel}>{t.loans.paidDate} <Text style={{ color: C.expense }}>*</Text></Text>
+              <DateField value={payDate} onChange={setPayDate} />
+              <Text style={s.interestHint}>{payModal?.mode === 'pay' ? t.loans.cascadeHint : t.loans.partialHint}</Text>
 
               <View style={s.btnRow}>
-                <Pressable style={[s.btn, s.btnCancel]} onPress={() => setPaymentModal(null)}>
+                <Pressable style={[s.btn, s.btnCancel]} onPress={() => setPayModal(null)}>
                   <Text style={s.btnCancelText}>{t.common.cancel}</Text>
                 </Pressable>
-                <Pressable style={[s.btn, { backgroundColor: C.income }]} onPress={handleSavePayment}>
+                <Pressable style={[s.btn, { backgroundColor: C.income }]} onPress={handlePay}>
                   <Text style={s.btnSaveText}>{t.common.save}</Text>
                 </Pressable>
               </View>
@@ -504,6 +628,23 @@ const s = StyleSheet.create({
   paymentDate: { fontSize: F.sm, color: C.text, fontWeight: '500' },
   paymentNotes: { fontSize: F.xs, color: C.textSec },
   paymentAmount: { fontSize: F.sm, fontWeight: '700' },
+
+  // Cuotas
+  instRow: { flexDirection: 'row', alignItems: 'center', gap: S.sm, paddingVertical: 6 },
+  instDot: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  instNum: { fontSize: F.xs, fontWeight: '800' },
+  instDue: { fontSize: F.sm, color: C.text, fontWeight: '600' },
+  instMeta: { fontSize: F.xs, color: C.textSec, marginTop: 2 },
+  nextDue: { fontSize: F.xs, fontWeight: '700', color: C.warn, marginBottom: 4 },
+  instActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  instAction: { paddingHorizontal: 8, paddingVertical: 4 },
+  instPayBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: R.sm, borderWidth: 1, borderColor: C.income + '44', backgroundColor: C.incomeBg },
+
+  // Selector de frecuencia
+  freqRow: { flexDirection: 'row', gap: 6 },
+  freqChip: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: R.sm, borderWidth: 1, borderColor: C.border, backgroundColor: C.surfaceUp },
+  freqChipActive: { borderColor: C.accent, backgroundColor: C.accentBg },
+  freqChipText: { fontSize: F.sm, color: C.textSec },
 
   fab: {
     position: 'absolute', right: 20, bottom: 28,

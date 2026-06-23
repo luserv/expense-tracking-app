@@ -1,7 +1,7 @@
 // Web / Electron: Firebase signInWithPopup
 import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
-import { ActivityIndicator, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useAuth } from '../utils/authContext';
 import { C, F, R, S, shadow } from '../utils/theme';
 
@@ -36,7 +36,7 @@ export default function LoginScreen() {
       <View style={s.card}>
         {/* Logo mark */}
         <View style={s.logoWrap}>
-          <Text style={s.logoMark}>S</Text>
+          <Image source={require('../assets/Chiro/chiro-simbolo-azul-512.png')} style={s.logoMark} resizeMode="contain" />
         </View>
 
         <Text style={s.appName}>Chiro</Text>
@@ -89,7 +89,7 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginBottom: S.lg,
   },
-  logoMark: { fontSize: 34, fontWeight: '900', color: C.accent },
+  logoMark: { width: 52, height: 52 },
 
   appName: { fontSize: F['2xl'], fontWeight: '800', color: C.text, marginBottom: S.xs },
   tagline: { fontSize: F.base, color: C.textSec, textAlign: 'center', marginBottom: S['3xl'], lineHeight: 22 },

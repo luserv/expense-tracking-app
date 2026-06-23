@@ -11,17 +11,17 @@ import { SIDEBAR_W } from '../utils/responsive';
 
 interface NavItem {
   route: string;
-  match: string;         // segment to test pathname against
+  match: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
   iconActive: React.ComponentProps<typeof Ionicons>['name'];
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { route: '/',            match: '/(tabs)',         icon: 'wallet-outline',    iconActive: 'wallet' },
-  { route: '/stats',       match: '/(tabs)/stats',   icon: 'bar-chart-outline', iconActive: 'bar-chart' },
-  { route: '/budgets',     match: '/(tabs)/budgets', icon: 'pie-chart-outline', iconActive: 'pie-chart' },
-  { route: '/loans',       match: '/(tabs)/loans',   icon: 'people-outline',    iconActive: 'people' },
-  { route: '/config',      match: '/(tabs)/config',  icon: 'settings-outline',  iconActive: 'settings' },
+  { route: '/',        match: '/(tabs)',         icon: 'wallet-outline',    iconActive: 'wallet' },
+  { route: '/stats',   match: '/(tabs)/stats',   icon: 'bar-chart-outline', iconActive: 'bar-chart' },
+  { route: '/budgets', match: '/(tabs)/budgets', icon: 'pie-chart-outline', iconActive: 'pie-chart' },
+  { route: '/loans',   match: '/(tabs)/loans',   icon: 'people-outline',    iconActive: 'people' },
+  { route: '/config',  match: '/(tabs)/config',  icon: 'settings-outline',  iconActive: 'settings' },
 ];
 
 export default function SidebarNav() {
@@ -32,7 +32,6 @@ export default function SidebarNav() {
   const labels = [t.tabs.expenses, t.tabs.stats, t.tabs.budgets, t.tabs.loans, t.tabs.config];
 
   const isActive = (item: NavItem) => {
-    // index matches if path is exactly /(tabs) or /(tabs)/
     if (item.route === '/') return pathname === '/' || pathname === '/(tabs)' || pathname === '/(tabs)/index';
     return pathname.startsWith(item.match);
   };
@@ -121,12 +120,8 @@ const s = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
-  navItemActive: {
-    backgroundColor: C.accentBg,
-  },
-  navItemPressed: {
-    backgroundColor: C.surfaceUp,
-  },
+  navItemActive: { backgroundColor: C.accentBg },
+  navItemPressed: { backgroundColor: C.surfaceUp },
   navIcon: { marginRight: S.sm },
   navLabel: {
     fontSize: F.base,

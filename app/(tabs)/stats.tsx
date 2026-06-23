@@ -1,8 +1,10 @@
 /**
  * Estadísticas anuales — Segato
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Loader from '../../components/Loader';
 import { AccountWithBalance, CategoryBreakdown, MonthRow, useExpenses } from '../../utils/context';
 import { useI18n } from '../../utils/i18n';
 import { CONTENT_MAX_W, useLayout } from '../../utils/responsive';
@@ -30,33 +32,57 @@ function SectionHeading({ label }: { label: string }) {
 }
 
 export default function StatsScreen() {
-  const { getYearSummary, getAccountsWithBalance, getCategoryBreakdown } = useExpenses();
+  const { getYearSummary, getAccountsWithBalance, getCategoryBreakdown, getLentInYear, getLentByMonth, getOutstandingTotal } = useExpenses();
   const { t } = useI18n();
   const [year, setYear]         = useState(new Date().getFullYear());
   const [rows, setRows]         = useState<MonthRow[]>([]);
   const [accounts, setAccounts] = useState<AccountWithBalance[]>([]);
   const [breakdown, setBreakdown] = useState<CategoryBreakdown[]>([]);
+  const [lentYear, setLentYear]   = useState(0);
+  const [lentByMonth, setLentByMonth] = useState<number[]>(Array(12).fill(0));
+  const [outstanding, setOutstanding] = useState(0);
+  const [initialLoading, setInitialLoading] = useState(true);
   const l = useLayout();
 
   const load = useCallback(async () => {
-    const [data, accs, cats] = await Promise.all([
-      getYearSummary(year),
-      getAccountsWithBalance(),
-      getCategoryBreakdown(year),
-    ]);
-    setRows(data);
-    setAccounts(accs);
-    setBreakdown(cats.filter(c => c.type === 'expense').sort((a, b) => b.total - a.total));
-  }, [year, getYearSummary, getAccountsWithBalance, getCategoryBreakdown]);
+    try {
+      const [data, accs, cats, lent, lentMonths, pending] = await Promise.all([
+        getYearSummary(year),
+        getAccountsWithBalance(),
+        getCategoryBreakdown(year),
+        getLentInYear(year),
+        getLentByMonth(year),
+        getOutstandingTotal(),
+      ]);
+      setRows(data);
+      setAccounts(accs);
+      setBreakdown(cats.filter(c => c.type === 'expense').sort((a, b) => b.total - a.total));
+      setLentYear(lent);
+      setLentByMonth(lentMonths);
+      setOutstanding(pending);
+    } finally {
+      setInitialLoading(false);
+    }
+  }, [year, getYearSummary, getAccountsWithBalance, getCategoryBreakdown, getLentInYear, getLentByMonth, getOutstandingTotal]);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const totalIncome  = rows.reduce((s, r) => s + r.income, 0);
   const totalExpense = rows.reduce((s, r) => s + r.expense, 0);
   const totalBalance = totalIncome - totalExpense;
   const hasData      = rows.some(r => r.income > 0 || r.expense > 0);
+  const hasLent      = lentByMonth.some(v => v > 0);
   const maxCat       = breakdown.length > 0 ? breakdown[0].total : 1;
   const totalCat     = breakdown.reduce((s, c) => s + c.total, 0);
+
+  if (initialLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+        <Loader label={t.common.loading} />
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -92,6 +118,23 @@ export default function StatsScreen() {
             <Text style={[s.totalAmt, { color: C.expense }]}>{fmt(totalExpense)}</Text>
           </View>
         </View>
+
+        {/* Préstamos — prestado en el año y total por cobrar (no afecta el balance) */}
+        {(lentYear > 0 || outstanding > 0) && (
+          <>
+            <SectionHeading label={t.stats.loans} />
+            <View style={s.card}>
+              <View style={[s.loanStatRow, s.rowSep]}>
+                <Text style={s.loanStatLabel}>{t.summary.lentYear}</Text>
+                <Text style={[s.loanStatValue, { color: C.loan }]}>{fmt(lentYear)}</Text>
+              </View>
+              <View style={s.loanStatRow}>
+                <Text style={s.loanStatLabel}>{t.summary.toCollect}</Text>
+                <Text style={[s.loanStatValue, { color: C.warn }]}>{fmt(outstanding)}</Text>
+              </View>
+            </View>
+          </>
+        )}
 
         {/* Account balances */}
         {accounts.length > 0 && (
@@ -154,7 +197,7 @@ export default function StatsScreen() {
 
         {/* Monthly table */}
         <SectionHeading label={t.stats.monthly} />
-        {!hasData ? (
+        {!hasData && !hasLent ? (
           <Text style={s.empty}>{t.stats.noData}</Text>
         ) : (
           <View style={s.card}>
@@ -163,25 +206,32 @@ export default function StatsScreen() {
               <Text style={[s.cell, s.cellMonth, s.headerCell]}></Text>
               <Text style={[s.cell, s.cellNum, s.headerCell]}>{t.stats.income}</Text>
               <Text style={[s.cell, s.cellNum, s.headerCell]}>{t.stats.expense}</Text>
+              {hasLent && <Text style={[s.cell, s.cellNum, s.headerCell]}>{t.stats.lent}</Text>}
               <Text style={[s.cell, s.cellNum, s.headerCell]}>{t.stats.balance}</Text>
             </View>
             {rows.map((r, i) => {
-              const active = r.income > 0 || r.expense > 0;
+              const lent = lentByMonth[r.month - 1] ?? 0;
+              const active = r.income > 0 || r.expense > 0 || lent > 0;
               return (
                 <View key={r.month} style={[s.tableRow, i < rows.length - 1 && s.rowSep]}>
                   <Text style={[s.cell, s.cellMonth, !active && { color: C.textDim }]}>
                     {t.stats.months[r.month - 1]}
                   </Text>
-                  <Text style={[s.cell, s.cellNum, { color: active ? C.income : C.textDim }]}>
-                    {active ? fmt(r.income) : '—'}
+                  <Text style={[s.cell, s.cellNum, { color: active && r.income > 0 ? C.income : C.textDim }]}>
+                    {r.income > 0 ? fmt(r.income) : '—'}
                   </Text>
-                  <Text style={[s.cell, s.cellNum, { color: active ? C.expense : C.textDim }]}>
-                    {active ? fmt(r.expense) : '—'}
+                  <Text style={[s.cell, s.cellNum, { color: active && r.expense > 0 ? C.expense : C.textDim }]}>
+                    {r.expense > 0 ? fmt(r.expense) : '—'}
                   </Text>
+                  {hasLent && (
+                    <Text style={[s.cell, s.cellNum, { color: lent > 0 ? C.loan : C.textDim }]}>
+                      {lent > 0 ? fmt(lent) : '—'}
+                    </Text>
+                  )}
                   <Text style={[s.cell, s.cellNum, {
                     color: !active ? C.textDim : r.balance >= 0 ? C.income : C.expense,
                   }]}>
-                    {active ? fmt(r.balance) : '—'}
+                    {(r.income > 0 || r.expense > 0) ? fmt(r.balance) : '—'}
                   </Text>
                 </View>
               );
@@ -233,6 +283,10 @@ const s = StyleSheet.create({
   accName: { fontSize: F.base, fontWeight: '600', color: C.text },
   accType: { fontSize: F.xs, color: C.textDim, marginTop: 2 },
   accBalance: { fontSize: F.md, fontWeight: '700' },
+
+  loanStatRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: S.md },
+  loanStatLabel: { fontSize: F.base, fontWeight: '600', color: C.text },
+  loanStatValue: { fontSize: F.md, fontWeight: '700' },
 
   // Categories
   catRow: { flexDirection: 'row', alignItems: 'center', padding: S.md, gap: S.sm },

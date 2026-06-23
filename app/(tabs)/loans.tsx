@@ -1,10 +1,11 @@
-import { useRouter } from 'expo-router';
-import { ChevronRight, Plus, Trash2 } from 'lucide-react-native';
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useCallback, useState } from 'react';
 import {
   Alert, FlatList, Modal, Platform, Pressable,
   StatusBar, StyleSheet, Text, TextInput, View,
 } from 'react-native';
+import Loader from '../../components/Loader';
 import { PersonWithTotal, useExpenses } from '../../utils/context';
 import { useI18n } from '../../utils/i18n';
 import { CONTENT_MAX_W, FORM_MAX_W, useLayout } from '../../utils/responsive';
@@ -14,6 +15,7 @@ export default function LoansScreen() {
   const [persons, setPersons] = useState<PersonWithTotal[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [personName, setPersonName] = useState('');
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const { getPersons, createPerson, deletePerson } = useExpenses();
   const { t } = useI18n();
@@ -21,8 +23,12 @@ export default function LoansScreen() {
   const l = useLayout();
   const isWide = !l.isPhone;
 
-  const load = useCallback(async () => { setPersons(await getPersons()); }, [getPersons]);
-  useEffect(() => { load(); }, [load]);
+  const load = useCallback(async () => {
+    try { setPersons(await getPersons()); }
+    finally { setInitialLoading(false); }
+  }, [getPersons]);
+  // Recargar cada vez que la pantalla se enfoca (ej. al volver del detalle de una persona).
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const handleAddPerson = async () => {
     if (!personName.trim()) { alert(t.loans.nameRequired); return; }
@@ -42,6 +48,15 @@ export default function LoansScreen() {
   const totalPendingAll = persons.reduce((s, p) => s + p.total_pending, 0);
   const totalLoanedAll  = persons.reduce((s, p) => s + p.total_loaned, 0);
   const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  if (initialLoading) {
+    return (
+      <View style={s.container}>
+        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+        <Loader label={t.common.loading} />
+      </View>
+    );
+  }
 
   return (
     <View style={s.container}>
@@ -82,9 +97,9 @@ export default function LoansScreen() {
               </Text>
             </View>
             <Pressable style={s.deleteBtn} onPress={() => handleDeletePerson(item)} hitSlop={10}>
-              <Trash2 size={18} color={C.textDim} />
+              <Ionicons name="trash-outline" size={18} color={C.textDim} />
             </Pressable>
-            <ChevronRight size={18} color={C.textDim} />
+            <Ionicons name="chevron-forward-outline" size={18} color={C.textDim} />
           </Pressable>
         )}
         ListEmptyComponent={() => (
@@ -98,7 +113,7 @@ export default function LoansScreen() {
         style={({ pressed }) => [s.fab, isWide && s.fabWide, pressed && { opacity: 0.88 }]}
         onPress={() => { setPersonName(''); setModalVisible(true); }}
       >
-        <Plus size={26} color="#fff" strokeWidth={2.5} />
+        <Ionicons name="add-outline" size={26} color="#fff" />
       </Pressable>
 
       <Modal animationType="slide" transparent visible={modalVisible} onRequestClose={() => setModalVisible(false)}>

@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { Platform, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SidebarNav from '../../components/SidebarNav';
 import { useI18n } from '../../utils/i18n';
 import { SIDEBAR_W, useLayout } from '../../utils/responsive';
@@ -22,8 +23,10 @@ const ic = StyleSheet.create({
 export default function TabsLayout() {
   const { t } = useI18n();
   const { isDesktop } = useLayout();
+  const insets = useSafeAreaInsets();
 
-  const BAR_H = Platform.OS === 'ios' ? 88 : 64;
+  const bottomInset = Platform.OS === 'ios' ? insets.bottom : insets.bottom;
+  const BAR_H = Platform.OS === 'ios' ? 50 + bottomInset : 56 + bottomInset;
 
   const tabs = (
     <Tabs
@@ -36,7 +39,7 @@ export default function TabsLayout() {
               borderTopWidth: 1,
               borderTopColor: C.border,
               height: BAR_H,
-              paddingBottom: Platform.OS === 'ios' ? 28 : 10,
+              paddingBottom: bottomInset > 0 ? bottomInset : (Platform.OS === 'ios' ? 8 : 10),
               paddingTop: 6,
               elevation: 0,
             },
@@ -48,23 +51,23 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{
         title: t.tabs.expenses,
-        tabBarIcon: ({ focused }) => <TabIcon name="wallet-outline" focused={focused} />,
+        tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'wallet' : 'wallet-outline'} focused={focused} />,
       }} />
       <Tabs.Screen name="stats" options={{
         title: t.tabs.stats,
-        tabBarIcon: ({ focused }) => <TabIcon name="bar-chart-outline" focused={focused} />,
+        tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'bar-chart' : 'bar-chart-outline'} focused={focused} />,
       }} />
       <Tabs.Screen name="budgets" options={{
         title: t.tabs.budgets,
-        tabBarIcon: ({ focused }) => <TabIcon name="pie-chart-outline" focused={focused} />,
+        tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'pie-chart' : 'pie-chart-outline'} focused={focused} />,
       }} />
       <Tabs.Screen name="loans" options={{
         title: t.tabs.loans,
-        tabBarIcon: ({ focused }) => <TabIcon name="people-outline" focused={focused} />,
+        tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'people' : 'people-outline'} focused={focused} />,
       }} />
       <Tabs.Screen name="config" options={{
         title: t.tabs.config,
-        tabBarIcon: ({ focused }) => <TabIcon name="settings-outline" focused={focused} />,
+        tabBarIcon: ({ focused }) => <TabIcon name={focused ? 'settings' : 'settings-outline'} focused={focused} />,
       }} />
     </Tabs>
   );

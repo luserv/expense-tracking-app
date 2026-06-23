@@ -1,6 +1,7 @@
 /**
  * Configuración — Segato
  */
+import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -15,6 +16,7 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -30,9 +32,9 @@ const LICENSE_PRICE = process.env.EXPO_PUBLIC_LICENSE_PRICE  ?? '4.99';
 const SUPPORT_EMAIL = process.env.EXPO_PUBLIC_SUPPORT_EMAIL  ?? 'tu@email.com';
 const DB_PATH       = `${FileSystem.documentDirectory}SQLite/${DB_NAME}`;
 
-const LANGS: { code: Lang; label: string; flag: string }[] = [
-  { code: 'es', label: 'Español', flag: '🇪🇸' },
-  { code: 'en', label: 'English', flag: '🇬🇧' },
+const LANGS: { code: Lang; label: string }[] = [
+  { code: 'es', label: 'Español' },
+  { code: 'en', label: 'English' },
 ];
 
 const PRESET_COLORS = [
@@ -120,9 +122,10 @@ export default function Config() {
     getAccounts, createAccount,
     getBills, createBill, updateBill, deleteBill, payBill, skipBill,
     getTags, createTag, deleteTag,
+    syncEnabled, setSyncEnabled, syncNow, syncing, lastSyncAt,
   } = useExpenses();
   const { t, lang, setLang } = useI18n();
-  const { user, licensed, signOutUser, driveToken } = useAuth();
+  const { user, licensed, signOutUser, deleteAccount, driveToken } = useAuth();
   const l = useLayout();
   const isWide = !l.isPhone;
   const isElectron = typeof window !== 'undefined' && !!(window as any).electronFS;
@@ -244,6 +247,46 @@ export default function Config() {
     }
   };
 
+  const handleToggleSync = async (value: boolean) => {
+    if (!driveToken) { setStatus(t.drive.signInRequired); return; }
+    setStatus(null);
+    await setSyncEnabled(value);
+  };
+
+  const handleSyncNow = async () => {
+    if (!driveToken) { setStatus(t.drive.signInRequired); return; }
+    setStatus(null);
+    const res = await syncNow();
+    if (res.error === 'TOKEN_EXPIRED') setStatus(t.drive.tokenExpired);
+    else if (res.error === 'SIGN_IN_REQUIRED') setStatus(t.drive.signInRequired);
+    else if (res.error) setStatus(t.drive.errorPrefix + res.error);
+    else setStatus(res.changed ? t.sync.imported : t.sync.upToDate);
+  };
+
+  const lastSyncLabel = lastSyncAt
+    ? `${t.sync.lastSync}: ${new Date(lastSyncAt).toLocaleString(lang === 'es' ? 'es-ES' : 'en-US')}`
+    : t.sync.never;
+
+  const SyncControls = () => (
+    <View style={s.syncBox}>
+      <View style={s.syncRow}>
+        <Text style={s.syncLabel}>{t.sync.autoLabel}</Text>
+        <Switch value={syncEnabled} onValueChange={handleToggleSync} disabled={!driveToken} />
+      </View>
+      <Pressable
+        style={[s.addRowBtn, { borderColor: '#1A73E8' + '66', marginTop: S.xs }]}
+        onPress={handleSyncNow}
+        disabled={syncing || !driveToken}
+      >
+        <Ionicons name="sync-outline" size={16} color="#1A73E8" />
+        <Text style={[s.addRowBtnText, { color: '#1A73E8' }]}>
+          {syncing ? t.sync.syncing : t.sync.syncNow}
+        </Text>
+      </Pressable>
+      <Text style={s.syncHint}>{lastSyncLabel}</Text>
+    </View>
+  );
+
   const handleSaveCategory = async () => {
     if (!catName.trim()) return;
     await createCategory({ name: catName.trim(), color: catColor, type: catType, icon: null });
@@ -269,6 +312,37 @@ export default function Config() {
     else await createBill(data);
     setBillModal(false);
     setBillsState(await getBills());
+  };
+
+  const handleDeleteAccount = () => {
+    const msg = lang === 'es'
+      ? 'Se eliminarán tu cuenta y todos tus datos de forma permanente. Esta acción no se puede deshacer.'
+      : 'Your account and all data will be permanently deleted. This action cannot be undone.';
+    const title = lang === 'es' ? 'Eliminar cuenta' : 'Delete account';
+    const confirmLabel = lang === 'es' ? 'Eliminar' : 'Delete';
+    const doDelete = async () => {
+      try {
+        setIsLoading(true);
+        await deleteAccount();
+      } catch (e: any) {
+        const needsReauth = e.code === 'auth/requires-recent-login';
+        const errMsg = needsReauth
+          ? (lang === 'es' ? 'Por seguridad, cerrá sesión e iniciá de nuevo antes de eliminar tu cuenta.' : 'For security, sign out and sign in again before deleting your account.')
+          : (e.message ?? (lang === 'es' ? 'Error al eliminar la cuenta.' : 'Error deleting account.'));
+        if (Platform.OS === 'web') alert(errMsg);
+        else Alert.alert(lang === 'es' ? 'Error' : 'Error', errMsg);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(msg)) doDelete();
+    } else {
+      Alert.alert(title, msg, [
+        { text: t.common.cancel, style: 'cancel' },
+        { text: confirmLabel, style: 'destructive', onPress: doDelete },
+      ]);
+    }
   };
 
   const handleDeleteBill = (id: string) => {
@@ -330,7 +404,6 @@ export default function Config() {
                         style={[s.langBtn, lang === l.code && s.langBtnActive]}
                         onPress={() => setLang(l.code)}
                       >
-                        <Text style={s.langFlag}>{l.flag}</Text>
                         <Text style={[s.langLabel, lang === l.code && { color: C.accent, fontWeight: '700' }]}>{l.label}</Text>
                       </Pressable>
                     ))}
@@ -348,6 +421,9 @@ export default function Config() {
                   </View>
                   <Pressable style={[s.addRowBtn, { borderColor: C.expense + '44' }]} onPress={signOutUser}>
                     <Text style={[s.addRowBtnText, { color: C.expense }]}>{lang === 'es' ? 'Cerrar sesión' : 'Sign out'}</Text>
+                  </Pressable>
+                  <Pressable style={[s.addRowBtn, { borderColor: C.expense + '22', marginTop: S.xs }]} onPress={handleDeleteAccount} disabled={isLoading}>
+                    <Text style={[s.addRowBtnText, { color: C.expense + 'AA', fontSize: F.xs }]}>{lang === 'es' ? 'Eliminar cuenta' : 'Delete account'}</Text>
                   </Pressable>
                 </SectionCard>
               </View>
@@ -449,20 +525,25 @@ export default function Config() {
                     <SectionCard style={s.cardHalf}>
                       <CardHeader title={t.drive.title} desc={t.drive.desc} />
                       <Pressable style={[s.addRowBtn, { borderColor: '#1A73E8' + '66' }]} onPress={handleDriveUpload} disabled={isLoading}>
+                        <Ionicons name="cloud-upload-outline" size={16} color="#1A73E8" />
                         <Text style={[s.addRowBtnText, { color: '#1A73E8' }]}>{isLoading ? t.drive.uploading : t.drive.upload}</Text>
                       </Pressable>
                       <Pressable style={[s.addRowBtn, { borderColor: '#34A853' + '66' }]} onPress={handleDriveRestore} disabled={isLoading}>
+                        <Ionicons name="cloud-download-outline" size={16} color="#34A853" />
                         <Text style={[s.addRowBtnText, { color: '#34A853' }]}>{isLoading ? t.drive.restoring : t.drive.restore}</Text>
                       </Pressable>
+                      <SyncControls />
                       {status && <StatusBox status={status} />}
                     </SectionCard>
                   )}
                   <SectionCard style={driveToken ? s.cardHalf : { flex: 1 }}>
                     <CardHeader title={t.config.database} desc={t.config.databaseDesc} />
                     <Pressable style={s.addRowBtn} onPress={handleExport} disabled={isLoading}>
+                      <Ionicons name="download-outline" size={16} color={C.accent} />
                       <Text style={s.addRowBtnText}>{t.config.exportBtn}</Text>
                     </Pressable>
                     <Pressable style={[s.addRowBtn, { borderColor: C.income + '44' }]} onPress={handleImport} disabled={isLoading}>
+                      <Ionicons name="folder-open-outline" size={16} color={C.income} />
                       <Text style={[s.addRowBtnText, { color: C.income }]}>{t.config.importBtn}</Text>
                     </Pressable>
                     {status && <StatusBox status={status} />}
@@ -506,7 +587,6 @@ export default function Config() {
                       style={[s.langBtn, lang === l.code && s.langBtnActive]}
                       onPress={() => setLang(l.code)}
                     >
-                      <Text style={s.langFlag}>{l.flag}</Text>
                       <Text style={[s.langLabel, lang === l.code && { color: C.accent, fontWeight: '700' }]}>{l.label}</Text>
                     </Pressable>
                   ))}
@@ -642,11 +722,14 @@ export default function Config() {
                 <SectionCard>
                   <CardHeader title={t.drive.title} desc={t.drive.desc} />
                   <Pressable style={[s.addRowBtn, { borderColor: '#1A73E8' + '66' }]} onPress={handleDriveUpload} disabled={isLoading}>
+                    <Ionicons name="cloud-upload-outline" size={16} color="#1A73E8" />
                     <Text style={[s.addRowBtnText, { color: '#1A73E8' }]}>{isLoading ? t.drive.uploading : t.drive.upload}</Text>
                   </Pressable>
                   <Pressable style={[s.addRowBtn, { borderColor: '#34A853' + '66' }]} onPress={handleDriveRestore} disabled={isLoading}>
+                    <Ionicons name="cloud-download-outline" size={16} color="#34A853" />
                     <Text style={[s.addRowBtnText, { color: '#34A853' }]}>{isLoading ? t.drive.restoring : t.drive.restore}</Text>
                   </Pressable>
+                  <SyncControls />
                   {status && <StatusBox status={status} />}
                 </SectionCard>
               )}
@@ -655,9 +738,11 @@ export default function Config() {
               <SectionCard>
                 <CardHeader title={t.config.database} desc={t.config.databaseDesc} />
                 <Pressable style={s.addRowBtn} onPress={handleExport} disabled={isLoading}>
+                  <Ionicons name="download-outline" size={16} color={C.accent} />
                   <Text style={s.addRowBtnText}>{t.config.exportBtn}</Text>
                 </Pressable>
                 <Pressable style={[s.addRowBtn, { borderColor: C.income + '44' }]} onPress={handleImport} disabled={isLoading}>
+                  <Ionicons name="folder-open-outline" size={16} color={C.income} />
                   <Text style={[s.addRowBtnText, { color: C.income }]}>{t.config.importBtn}</Text>
                 </Pressable>
                 {status && <StatusBox status={status} />}
@@ -927,7 +1012,6 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: C.border, backgroundColor: C.surfaceUp,
   },
   langBtnActive: { borderColor: C.accent, backgroundColor: C.accentBg },
-  langFlag: { fontSize: 18 },
   langLabel: { fontSize: F.base, color: C.textSec, fontWeight: '500' },
 
   // Bills
@@ -979,11 +1063,17 @@ const s = StyleSheet.create({
   upgradeHint: { fontSize: F.sm, color: C.textSec, lineHeight: 20, marginTop: S.sm },
 
   addRowBtn: {
+    flexDirection: 'row', justifyContent: 'center', gap: 8,
     borderWidth: 1, borderColor: C.border,
     borderRadius: R.sm, paddingVertical: 12,
     alignItems: 'center', marginTop: S.sm,
   },
   addRowBtnText: { fontSize: F.sm, fontWeight: '700', color: C.accent },
+
+  syncBox: { marginTop: S.sm, paddingTop: S.sm, borderTopWidth: 1, borderTopColor: C.border },
+  syncRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  syncLabel: { fontSize: F.sm, fontWeight: '600', color: C.text, flex: 1, marginRight: S.sm },
+  syncHint: { fontSize: F.xs, color: C.textSec, marginTop: S.xs },
 
   statusBox: { marginTop: S.sm, padding: S.sm, borderRadius: R.xs, borderWidth: 1 },
   statusText: { fontSize: F.sm },

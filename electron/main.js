@@ -1,10 +1,14 @@
-const { app, BrowserWindow, ipcMain, protocol, net, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const url = require('url');
+const { CREATE_TABLES, CREATE_INDEXES, MIGRATIONS, SEED, SYNC_TABLES, buildMergeStatement } = require('../utils/dbSchema.js');
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'app', privileges: { secure: true, standard: true, supportFetchAPI: true } },
+  // corsEnabled es CLAVE: los fonts (@font-face / FontFace API) se piden siempre en
+  // modo CORS aunque sean same-origin. Sin esto Chromium bloquea el TTF de Ionicons
+  // y los íconos quedan invisibles, aunque el resto de assets (no-cors) sí cargue.
+  { scheme: 'app', privileges: { secure: true, standard: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
 ]);
 
 const userDataPath = app.getPath('userData');
@@ -21,93 +25,12 @@ function initDB() {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS account (
-      account_id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      currency TEXT DEFAULT 'USD'
-    );
-
-    CREATE TABLE IF NOT EXISTS category (
-      category_id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      color TEXT DEFAULT '#007AFF',
-      icon TEXT,
-      type TEXT CHECK(type IN ('income', 'expense')) DEFAULT 'expense'
-    );
-
-    CREATE TABLE IF NOT EXISTS expense (
-      expense_id TEXT PRIMARY KEY,
-      description TEXT NOT NULL,
-      amount REAL NOT NULL,
-      date TEXT NOT NULL,
-      category_id TEXT,
-      account_id TEXT,
-      notes TEXT,
-      type TEXT CHECK(type IN ('income', 'expense')) DEFAULT 'expense',
-      FOREIGN KEY (category_id) REFERENCES category(category_id),
-      FOREIGN KEY (account_id) REFERENCES account(account_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS person (
-      person_id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      notes TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS loan (
-      loan_id TEXT PRIMARY KEY,
-      person_id TEXT NOT NULL,
-      description TEXT NOT NULL,
-      amount REAL NOT NULL,
-      date TEXT NOT NULL,
-      is_paid INTEGER DEFAULT 0,
-      interest_rate REAL DEFAULT 0,
-      interest_type TEXT DEFAULT 'simple',
-      months INTEGER DEFAULT 1,
-      FOREIGN KEY (person_id) REFERENCES person(person_id)
-    );
-  `);
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS payment (
-      payment_id TEXT PRIMARY KEY,
-      loan_id TEXT NOT NULL,
-      amount REAL NOT NULL,
-      date TEXT NOT NULL,
-      notes TEXT,
-      FOREIGN KEY (loan_id) REFERENCES loan(loan_id)
-    );
-  `);
-
-  // Migración: columnas de interés en loan (para instancias existentes)
-  try { db.prepare("ALTER TABLE loan ADD COLUMN interest_rate REAL DEFAULT 0").run(); } catch {}
-  try { db.prepare("ALTER TABLE loan ADD COLUMN interest_type TEXT DEFAULT 'simple'").run(); } catch {}
-  try { db.prepare("ALTER TABLE loan ADD COLUMN months INTEGER DEFAULT 1").run(); } catch {}
-
-  db.exec(`
-    INSERT OR IGNORE INTO account (account_id, name, currency) VALUES
-      ('acc_cash', 'Efectivo', 'USD'),
-      ('acc_bank', 'Banco', 'USD');
-  `);
-
-  db.exec(`
-    INSERT OR IGNORE INTO category (category_id, name, color, icon, type) VALUES
-      ('cat_food',       'Alimentación',    '#FF6B6B', 'restaurant',         'expense'),
-      ('cat_transport',  'Transporte',      '#4ECDC4', 'car',                'expense'),
-      ('cat_housing',    'Vivienda',        '#45B7D1', 'home',               'expense'),
-      ('cat_health',     'Salud',           '#96CEB4', 'medical',            'expense'),
-      ('cat_entertain',  'Entretenimiento', '#F7B731', 'game-controller',    'expense'),
-      ('cat_clothes',    'Ropa',            '#DDA0DD', 'shirt',              'expense'),
-      ('cat_education',  'Educación',       '#54A0FF', 'school',             'expense'),
-      ('cat_services',   'Servicios',       '#F7DC6F', 'flash',              'expense'),
-      ('cat_other_exp',  'Otros',           '#BDC3C7', 'ellipsis-horizontal','expense'),
-      ('cat_salary',     'Salario',         '#27AE60', 'cash',               'income'),
-      ('cat_freelance',  'Freelance',       '#2ECC71', 'laptop',             'income'),
-      ('cat_invest',     'Inversión',       '#16A085', 'trending-up',        'income'),
-      ('cat_gift',       'Regalo',          '#8E44AD', 'gift',               'income'),
-      ('cat_other_inc',  'Otros ingresos',  '#1ABC9C', 'add-circle',         'income');
-  `);
+  // Esquema desde la fuente única compartida (utils/dbSchema.js).
+  // Migraciones ANTES que los índices: agregan columnas que estos referencian.
+  for (const sql of CREATE_TABLES) db.exec(sql);
+  for (const sql of MIGRATIONS) { try { db.prepare(sql).run(); } catch {} }
+  for (const sql of CREATE_INDEXES) { try { db.exec(sql); } catch {} }
+  for (const sql of SEED) db.exec(sql);
 }
 
 // ── IPC: database ─────────────────────────────────────────────────────────────
@@ -145,6 +68,65 @@ ipcMain.handle('db:writeFromBase64', (_event, base64) => {
   } catch (e) {
     return { error: e.message };
   }
+});
+
+// Merge por registro: ATTACH la DB remota y hace UPSERT con LWW por updated_at.
+ipcMain.handle('db:mergeFromBase64', (_event, base64) => {
+  const tmpPath = path.join(userDataPath, '_sync_remote.db');
+  try {
+    fs.writeFileSync(tmpPath, Buffer.from(base64, 'base64'));
+    db.exec(`ATTACH DATABASE '${tmpPath.replace(/'/g, "''")}' AS remote`);
+    const merge = db.transaction(() => {
+      for (const { table, pk } of SYNC_TABLES) {
+        const localCols = db.prepare(`PRAGMA table_info(${table})`).all().map(r => r.name);
+        const remoteCols = db.prepare(`PRAGMA remote.table_info(${table})`).all().map(r => r.name);
+        const cols = localCols.filter(c => remoteCols.includes(c));
+        if (!cols.includes('updated_at')) continue;
+        db.exec(buildMergeStatement(table, pk, cols));
+      }
+    });
+    merge();
+    return { success: true };
+  } catch (e) {
+    return { error: e.message };
+  } finally {
+    try { db.exec('DETACH DATABASE remote'); } catch {}
+    try { fs.unlinkSync(tmpPath); } catch {}
+  }
+});
+
+// Genera un PDF a partir de HTML (reporte de préstamo) y lo guarda.
+ipcMain.handle('report:savePdf', async (_event, html, baseName) => {
+  let win = null;
+  const tmpHtml = path.join(userDataPath, '_report.html');
+  try {
+    fs.writeFileSync(tmpHtml, html);
+    win = new BrowserWindow({ show: false, webPreferences: { contextIsolation: true, nodeIntegration: false } });
+    await win.loadFile(tmpHtml);
+    const pdf = await win.webContents.printToPDF({ printBackground: true });
+    const res = await dialog.showSaveDialog({
+      title: 'Guardar reporte',
+      defaultPath: `${baseName}.pdf`,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    });
+    if (res.canceled || !res.filePath) return { canceled: true };
+    fs.writeFileSync(res.filePath, pdf);
+    return { success: true };
+  } catch (e) {
+    return { error: e.message };
+  } finally {
+    if (win && !win.isDestroyed()) win.destroy();
+    try { fs.unlinkSync(tmpHtml); } catch {}
+  }
+});
+
+ipcMain.handle('db:signature', () => {
+  let rows = 0, sum = 0, max = 0;
+  for (const { table } of SYNC_TABLES) {
+    const r = db.prepare(`SELECT COUNT(*) c, COALESCE(SUM(updated_at),0) s, COALESCE(MAX(updated_at),0) m FROM ${table}`).get();
+    rows += r.c; sum += r.s; max = Math.max(max, r.m);
+  }
+  return `${rows}:${sum}:${max}`;
 });
 
 ipcMain.handle('fs:importDB', async () => {
@@ -227,10 +209,29 @@ function getDistPath() {
     : path.join(__dirname, '..', 'dist');
 }
 
+let splash = null;
+
+function createSplash() {
+  splash = new BrowserWindow({
+    width: 340, height: 380,
+    frame: false, resizable: false, center: true, show: true,
+    backgroundColor: '#0b0b0f',
+    webPreferences: { contextIsolation: true, nodeIntegration: false },
+  });
+  splash.loadFile(path.join(__dirname, 'splash.html'));
+  splash.on('closed', () => { splash = null; });
+}
+
+function closeSplash() {
+  if (splash && !splash.isDestroyed()) splash.destroy();
+  splash = null;
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 420,
     height: 800,
+    show: false, // se muestra recién cuando el contenido terminó de cargar
     icon: path.join(__dirname, '../assets/images/icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -238,6 +239,14 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
+
+  // Mostrar la ventana y cerrar el splash una vez cargado el bundle.
+  win.webContents.once('did-finish-load', () => {
+    closeSplash();
+    win.show();
+  });
+  // Red de seguridad: si algo falla, no dejar el splash colgado para siempre.
+  setTimeout(() => { if (splash) { closeSplash(); if (!win.isVisible()) win.show(); } }, 20000);
 
   win.webContents.setWindowOpenHandler(({ url: winUrl }) => {
     const isOAuth =
@@ -280,18 +289,59 @@ app.whenReady().then(() => {
     const targetPath = fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()
       ? fullPath
       : path.join(distPath, 'index.html');
-    return net.fetch(url.pathToFileURL(targetPath).toString());
+
+    // Usar fs.readFileSync (parcheado por Electron para leer dentro del ASAR)
+    // en vez de net.fetch(file://) que no entiende el formato ASAR de Chromium.
+    const MIME = {
+      '.html': 'text/html; charset=utf-8',
+      '.js':   'application/javascript',
+      '.mjs':  'application/javascript',
+      '.css':  'text/css',
+      '.json': 'application/json',
+      '.png':  'image/png',
+      '.jpg':  'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif':  'image/gif',
+      '.svg':  'image/svg+xml',
+      '.ico':  'image/x-icon',
+      '.webp': 'image/webp',
+      '.ttf':  'font/ttf',
+      '.otf':  'font/otf',
+      '.woff': 'font/woff',
+      '.woff2':'font/woff2',
+    };
+    const ext = path.extname(targetPath).toLowerCase();
+    const mime = MIME[ext] || 'application/octet-stream';
+    try {
+      const data = fs.readFileSync(targetPath);
+      return new Response(data, {
+        headers: {
+          'Content-Type': mime,
+          // Necesario para que la petición CORS del font no sea rechazada.
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    } catch {
+      return new Response('Not found', { status: 404 });
+    }
   });
 
-  try {
-    initDB();
-  } catch (err) {
-    dialog.showErrorBox('Error al iniciar la base de datos', err.stack || err.message);
-    app.quit();
-    return;
-  }
-
-  createWindow();
+  // Mostrar el splash de inmediato; diferir initDB para que alcance a pintarse
+  // (initDB es síncrono y puede tardar la primera vez creando índices).
+  createSplash();
+  const boot = () => {
+    try {
+      initDB();
+    } catch (err) {
+      closeSplash();
+      dialog.showErrorBox('Error al iniciar la base de datos', err.stack || err.message);
+      app.quit();
+      return;
+    }
+    createWindow();
+  };
+  if (splash) splash.webContents.once('did-finish-load', boot);
+  else boot();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

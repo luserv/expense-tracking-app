@@ -7,6 +7,7 @@
   },
   "files": [
     "electron/**/*",
+    "utils/dbSchema.js",
     "dist/**/*",
     "!dist/**/*.map",
     "!node_modules/**/*",
@@ -42,7 +43,7 @@
     "target": [{ "target": "AppImage", "arch": ["x64"] }],
     "icon": "assets/images/icon.png"
   },
-  "compression": "maximum",
+  "compression": "normal",
   "nsis": {
     "oneClick": false,
     "allowToChangeInstallationDirectory": true

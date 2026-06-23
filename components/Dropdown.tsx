@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, Check } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { C, F, R, S } from '../utils/theme';
 
@@ -39,7 +39,7 @@ export default function Dropdown({
         <Text style={[s.triggerText, !selectedLabel && s.placeholder]} numberOfLines={1}>
           {selectedLabel ?? (allowNull ? nullLabel : placeholder)}
         </Text>
-        <ChevronDown size={16} color={C.textDim} />
+        <Ionicons name="chevron-down-outline" size={16} color={C.textDim} />
       </Pressable>
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
@@ -61,7 +61,7 @@ export default function Dropdown({
                     <Text style={[s.optionText, isSelected && s.optionTextActive]} numberOfLines={1}>
                       {item.label}
                     </Text>
-                    {isSelected && <Check size={16} color={C.accent} strokeWidth={2.5} />}
+                    {isSelected && <Ionicons name="checkmark-outline" size={16} color={C.accent} />}
                   </Pressable>
                 );
               }}

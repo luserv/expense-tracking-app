@@ -49,9 +49,19 @@ app-example
 # prettier
 .prettier 
 
-# Local SQLite database
+#Local SQLite database
 data/
 *.db
 
 # Electron build output
 release/
+
+# Production keystore
+android/app/release.keystore
+@luserv33__chiro-app_OLD_1.jks
+
+
+
+# build
+*.apk 
+*.abb

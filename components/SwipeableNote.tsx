@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { Trash2 } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { LogBox, Pressable, StyleSheet, Text, View } from 'react-native';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
@@ -46,7 +46,7 @@ export function SwipeableNote({ note, onPress, onDelete }: Props) {
         }}
       >
         <Reanimated.View style={[styleAnimation, styles.rightAction]}>
-          <Trash2 size={24} color="red" />
+          <Ionicons name="trash-outline" size={24} color="red" />
         </Reanimated.View>
       </Pressable>
     );

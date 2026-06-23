@@ -1,7 +1,7 @@
 /**
  * Presupuestos y Alcancías — Segato
  */
-import { ChevronLeft, ChevronRight, Minus, Pencil, PiggyBank as PiggyBankIcon, Plus, Trash2, Wallet } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
@@ -16,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import Dropdown from '../../components/Dropdown';
+import Loader from '../../components/Loader';
 import { BudgetWithProgress, Category, PiggyBank, useExpenses } from '../../utils/context';
 import { useI18n } from '../../utils/i18n';
 import { CONTENT_MAX_W, FORM_MAX_W, useLayout } from '../../utils/responsive';
@@ -51,6 +52,7 @@ export default function BudgetsScreen() {
 
   const [budgets, setBudgets]     = useState<BudgetWithProgress[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [budgetModal, setBudgetModal] = useState(false);
   const [selCatId, setSelCatId]   = useState<string | null>(null);
   const [budgetLimit, setBudgetLimit] = useState('');
@@ -81,14 +83,18 @@ export default function BudgetsScreen() {
   const MONTHS = lang === 'es' ? MONTH_ES : MONTH_EN;
 
   const loadAll = useCallback(async () => {
-    const [b, cats, p] = await Promise.all([
-      getBudgetsWithProgress(year, month),
-      getCategories(),
-      getPiggyBanks(),
-    ]);
-    setBudgets(b);
-    setCategories(cats.filter(c => c.type === 'expense'));
-    setPigs(p);
+    try {
+      const [b, cats, p] = await Promise.all([
+        getBudgetsWithProgress(year, month),
+        getCategories(),
+        getPiggyBanks(),
+      ]);
+      setBudgets(b);
+      setCategories(cats.filter(c => c.type === 'expense'));
+      setPigs(p);
+    } finally {
+      setInitialLoading(false);
+    }
   }, [year, month, getBudgetsWithProgress, getCategories, getPiggyBanks]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
@@ -166,6 +172,15 @@ export default function BudgetsScreen() {
   const overlayStyle = [s.overlay, isWide && s.overlayDesktop];
   const sheetStyle   = [s.sheet, isWide && s.sheetDesktop];
 
+  if (initialLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+        <Loader label={t.common.loading} />
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
@@ -175,11 +190,11 @@ export default function BudgetsScreen() {
           {/* Month selector */}
           <View style={s.monthRow}>
             <Pressable onPress={prevMonth} hitSlop={12} style={s.monthArrow}>
-              <ChevronLeft size={20} color={C.textSec} />
+              <Ionicons name="chevron-back-outline" size={20} color={C.textSec} />
             </Pressable>
             <Text style={s.monthLabel}>{MONTHS[month-1]} {year}</Text>
             <Pressable onPress={nextMonth} hitSlop={12} style={s.monthArrow}>
-              <ChevronRight size={20} color={C.textSec} />
+              <Ionicons name="chevron-forward-outline" size={20} color={C.textSec} />
             </Pressable>
           </View>
 
@@ -208,7 +223,7 @@ export default function BudgetsScreen() {
           {/* Budgets section */}
           <View style={s.sectionRow}>
             <View style={s.sectionLeft}>
-              <Wallet size={16} color={C.accent} />
+              <Ionicons name="wallet-outline" size={16} color={C.accent} />
               <Text style={s.sectionTitle}>{t.budgets.title}</Text>
             </View>
             {availableCats.length > 0 && (
@@ -217,7 +232,7 @@ export default function BudgetsScreen() {
                 onPress={() => { setSelCatId(null); setBudgetLimit(''); setBudgetModal(true); }}
                 android_ripple={{ color: C.accentPress, borderless: false }}
               >
-                <Plus size={14} color="#fff" strokeWidth={2.5} />
+                <Ionicons name="add-outline" size={14} color="#fff" />
               </Pressable>
             )}
           </View>
@@ -254,7 +269,7 @@ export default function BudgetsScreen() {
                         </Text>
                       </View>
                       <Pressable onPress={() => handleDeleteBudget(b.budget_id)} hitSlop={10}>
-                        <Trash2 size={16} color={C.textDim} />
+                        <Ionicons name="trash-outline" size={16} color={C.textDim} />
                       </Pressable>
                     </View>
                     <ProgressBar value={b.spent} max={b.amount} color={b.category_color} />
@@ -278,14 +293,14 @@ export default function BudgetsScreen() {
           {/* Piggy banks section */}
           <View style={[s.sectionRow, { marginTop: S.xl }]}>
             <View style={s.sectionLeft}>
-              <PiggyBankIcon size={16} color={C.transfer} />
+              <Ionicons name="save-outline" size={16} color={C.transfer} />
               <Text style={s.sectionTitle}>{t.piggyBanks.title}</Text>
             </View>
             <Pressable
               style={[s.addBtn, { backgroundColor: C.transfer }]}
               onPress={() => { setPigEditId(null); setPigName(''); setPigTarget(''); setPigColor(PRESET_COLORS[4]); setPigNotes(''); setPigModal(true); }}
             >
-              <Plus size={14} color="#fff" strokeWidth={2.5} />
+              <Ionicons name="add-outline" size={14} color="#fff" />
             </Pressable>
           </View>
 
@@ -319,10 +334,10 @@ export default function BudgetsScreen() {
                         </Text>
                       </View>
                       <Pressable onPress={() => { setPigEditId(p.piggy_bank_id); setPigName(p.name); setPigTarget(String(p.target_amount)); setPigColor(p.color); setPigNotes(p.notes ?? ''); setPigModal(true); }} hitSlop={10} style={{ marginRight: S.xs }}>
-                        <Pencil size={16} color={C.textDim} />
+                        <Ionicons name="create-outline" size={16} color={C.textDim} />
                       </Pressable>
                       <Pressable onPress={() => handleDeletePig(p.piggy_bank_id)} hitSlop={10}>
-                        <Trash2 size={16} color={C.textDim} />
+                        <Ionicons name="trash-outline" size={16} color={C.textDim} />
                       </Pressable>
                     </View>
 
@@ -339,14 +354,14 @@ export default function BudgetsScreen() {
                         style={[s.fundBtn, { backgroundColor: C.incomeBg, borderColor: C.income + '44' }]}
                         onPress={() => openFundModal(p.piggy_bank_id, 'add')}
                       >
-                        <Plus size={13} color={C.income} strokeWidth={2.5} />
+                        <Ionicons name="add-outline" size={13} color={C.income} />
                         <Text style={[s.fundBtnText, { color: C.income }]}>{t.piggyBanks.addFunds}</Text>
                       </Pressable>
                       <Pressable
                         style={[s.fundBtn, { backgroundColor: C.warnBg, borderColor: C.warn + '44' }]}
                         onPress={() => openFundModal(p.piggy_bank_id, 'withdraw')}
                       >
-                        <Minus size={13} color={C.warn} strokeWidth={2.5} />
+                        <Ionicons name="remove-outline" size={13} color={C.warn} />
                         <Text style={[s.fundBtnText, { color: C.warn }]}>{t.piggyBanks.withdrawFunds}</Text>
                       </Pressable>
                     </View>

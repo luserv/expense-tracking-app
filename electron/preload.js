@@ -22,8 +22,14 @@ contextBridge.exposeInMainWorld('electronFS', {
 contextBridge.exposeInMainWorld('electronDrive', {
   readDBAsBase64: () => ipcRenderer.invoke('db:readAsBase64'),
   writeDBFromBase64: (base64) => ipcRenderer.invoke('db:writeFromBase64', base64),
+  mergeDBFromBase64: (base64) => ipcRenderer.invoke('db:mergeFromBase64', base64),
+  dbSignature: () => ipcRenderer.invoke('db:signature'),
 });
 
 contextBridge.exposeInMainWorld('electronAuth', {
   googleOAuth: (params) => ipcRenderer.invoke('auth:googleOAuth', params),
+});
+
+contextBridge.exposeInMainWorld('electronReport', {
+  savePdf: (html, baseName) => ipcRenderer.invoke('report:savePdf', html, baseName),
 });

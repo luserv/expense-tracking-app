@@ -44,8 +44,8 @@ Metro's extension convention drives which file is used per platform:
 |------|---------|
 | `utils/db.native.ts` | Android — wraps `expo-sqlite` sync API in Promises |
 | `utils/db.ts` | Web/Electron — proxies calls via `window.electronDB` (IPC bridge) |
-| `app/login.native.tsx` | Android — uses `expo-auth-session` for Google OAuth |
-| `app/login.tsx` | Web/Electron — uses Firebase `signInWithRedirect` / `signInWithPopup` |
+| `app/login.native.tsx` | Android — uses `@react-native-google-signin/google-signin` (native SDK) |
+| `app/login.tsx` | Web/Electron — uses Firebase `signInWithPopup` / Electron OAuth window |
 | `components/AdBanner.tsx` | Native — `react-native-google-mobile-ads` |
 | `components/AdBanner.web.tsx` | Web/Electron — stub |
 

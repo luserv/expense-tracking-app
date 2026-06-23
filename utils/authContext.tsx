@@ -1,19 +1,22 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   GoogleAuthProvider,
-  getRedirectResult,
   onAuthStateChanged,
   signInWithCredential,
-  signInWithRedirect,
+  signInWithPopup,
   signOut,
   User,
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { deleteDoc, doc, getDoc } from 'firebase/firestore';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { auth, db_firebase } from './firebase';
 
 const GUEST_KEY = 'auth_guest_mode';
+const DRIVE_TOKEN_KEY = 'drive_access_token';
+const DRIVE_TOKEN_EXPIRY_KEY = 'drive_token_expiry';
+/** Margen: 55 min. Los tokens de Google duran 1 h; refrescamos antes de que expiren. */
+const TOKEN_LIFETIME_MS = 55 * 60 * 1000;
 
 interface AuthState {
   user: User | null;
@@ -23,8 +26,10 @@ interface AuthState {
   driveToken: string | null;
   signIn: () => Promise<void>;
   signOutUser: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   continueAsGuest: () => Promise<void>;
   setDriveToken: (token: string | null) => void;
+  refreshDriveToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthState>({
@@ -35,8 +40,10 @@ const AuthContext = createContext<AuthState>({
   driveToken: null,
   signIn: async () => {},
   signOutUser: async () => {},
+  deleteAccount: async () => {},
   continueAsGuest: async () => {},
   setDriveToken: () => {},
+  refreshDriveToken: async () => null,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -55,23 +62,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
-    // Capturar resultado del redirect de Google (solo en web)
-    if (Platform.OS === 'web') {
-      getRedirectResult(auth).then(result => {
-        if (result) {
-          const credential = GoogleAuthProvider.credentialFromResult(result);
-          if (credential?.accessToken) setDriveToken(credential.accessToken);
-        }
-      }).catch(() => {});
+  /** Guarda el token en estado y lo persiste en AsyncStorage con timestamp de expiración. */
+  const persistDriveToken = useCallback(async (token: string | null) => {
+    setDriveToken(token);
+    if (token) {
+      const expiry = String(Date.now() + TOKEN_LIFETIME_MS);
+      await AsyncStorage.setItem(DRIVE_TOKEN_KEY, token);
+      await AsyncStorage.setItem(DRIVE_TOKEN_EXPIRY_KEY, expiry);
+    } else {
+      await AsyncStorage.removeItem(DRIVE_TOKEN_KEY);
+      await AsyncStorage.removeItem(DRIVE_TOKEN_EXPIRY_KEY);
     }
+  }, []);
 
+  useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
         setIsGuest(false);
         await AsyncStorage.removeItem(GUEST_KEY);
         await checkLicense(u.uid);
+
+        if (Platform.OS === 'android') {
+          // Android: GoogleSignin maneja el refresh automáticamente
+          try {
+            const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+            const tokens = await GoogleSignin.getTokens();
+            await persistDriveToken(tokens.accessToken);
+          } catch {}
+        } else {
+          // Web/Electron: restaurar token persistido si no expiró
+          try {
+            const stored = await AsyncStorage.getItem(DRIVE_TOKEN_KEY);
+            const expiry = await AsyncStorage.getItem(DRIVE_TOKEN_EXPIRY_KEY);
+            if (stored && expiry && Date.now() < Number(expiry)) {
+              setDriveToken(stored);
+            }
+          } catch {}
+        }
       } else {
         setLicensed(false);
         // Restaurar modo invitado si estaba activo
@@ -81,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
     return unsub;
-  }, [checkLicense]);
+  }, [checkLicense, persistDriveToken]);
 
   const signIn = useCallback(async () => {
     const provider = new GoogleAuthProvider();
@@ -107,31 +135,98 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { access_token, id_token } = await electronAuth.googleOAuth({ authUrl, redirectUri });
         const credential = GoogleAuthProvider.credential(id_token, access_token);
         await signInWithCredential(auth, credential);
-        setDriveToken(access_token);
+        await persistDriveToken(access_token);
         return;
       }
-      await signInWithRedirect(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) await persistDriveToken(credential.accessToken);
       return;
     }
 
-    // Android: OAuth se maneja desde login.native.tsx via expo-auth-session
-    throw new Error('USE_EXPO_AUTH');
-  }, []);
+    // Android: OAuth se maneja desde login.native.tsx via GoogleSignin
+    throw new Error('USE_GOOGLE_SIGNIN');
+  }, [persistDriveToken]);
 
   const signOutUser = useCallback(async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+        await GoogleSignin.signOut();
+      } catch {}
+    }
     await signOut(auth);
     setIsGuest(false);
-    setDriveToken(null);
+    await persistDriveToken(null);
     await AsyncStorage.removeItem(GUEST_KEY);
-  }, []);
+  }, [persistDriveToken]);
+
+  const deleteAccount = useCallback(async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('No hay sesión activa.');
+
+    // 1. Borrar datos de Firestore (licencia)
+    try {
+      await deleteDoc(doc(db_firebase, 'licenses', currentUser.uid));
+    } catch {
+      // Si no existe el doc, continuar igual
+    }
+
+    // 2. En Android: revocar acceso de Google para que el SDK limpie la sesión
+    if (Platform.OS === 'android') {
+      try {
+        const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+        await GoogleSignin.revokeAccess();
+        await GoogleSignin.signOut();
+      } catch {}
+    }
+
+    // 3. Eliminar el usuario de Firebase Auth
+    // Puede fallar con auth/requires-recent-login si la sesión es antigua
+    await currentUser.delete();
+
+    // 4. Limpiar estado local
+    await persistDriveToken(null);
+    await AsyncStorage.removeItem(GUEST_KEY);
+  }, [persistDriveToken]);
 
   const continueAsGuest = useCallback(async () => {
     await AsyncStorage.setItem(GUEST_KEY, 'true');
     setIsGuest(true);
   }, []);
 
+  /**
+   * Refresca el Drive access token sin interacción del usuario cuando es posible.
+   * - Android: GoogleSignin maneja el refresh automáticamente.
+   * - Electron/Web: revisa el token persistido; si expiró retorna null.
+   */
+  const refreshDriveToken = useCallback(async (): Promise<string | null> => {
+    if (Platform.OS === 'android') {
+      try {
+        const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+        const tokens = await GoogleSignin.getTokens();
+        await persistDriveToken(tokens.accessToken);
+        return tokens.accessToken;
+      } catch {
+        return null;
+      }
+    }
+
+    // Web/Electron: chequear token persistido
+    try {
+      const stored = await AsyncStorage.getItem(DRIVE_TOKEN_KEY);
+      const expiry = await AsyncStorage.getItem(DRIVE_TOKEN_EXPIRY_KEY);
+      if (stored && expiry && Date.now() < Number(expiry)) {
+        setDriveToken(stored);
+        return stored;
+      }
+    } catch {}
+
+    return null;
+  }, [persistDriveToken]);
+
   return (
-    <AuthContext.Provider value={{ user, isGuest, licensed, loading, driveToken, signIn, signOutUser, continueAsGuest, setDriveToken }}>
+    <AuthContext.Provider value={{ user, isGuest, licensed, loading, driveToken, signIn, signOutUser, deleteAccount, continueAsGuest, setDriveToken, refreshDriveToken }}>
       {children}
     </AuthContext.Provider>
   );

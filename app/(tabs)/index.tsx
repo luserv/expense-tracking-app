@@ -2,7 +2,7 @@
  * Pantalla principal — Segato
  */
 import { useRouter } from 'expo-router';
-import { ArrowLeftRight, Bell, ChevronLeft, ChevronRight, Plus, Search, X } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useState } from 'react';
 import {
   FlatList, Modal, Platform, Pressable,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import AdBanner from '../../components/AdBanner';
 import Dropdown from '../../components/Dropdown';
+import Loader from '../../components/Loader';
 import { Account, Bill, Category, Expense, LoanWithPerson, MonthSummary, Tag, useExpenses } from '../../utils/context';
 import { useI18n } from '../../utils/i18n';
 import { CONTENT_MAX_W, useLayout } from '../../utils/responsive';
@@ -48,6 +49,7 @@ export default function HomeScreen() {
   const [monthLoans, setMonthLoans]       = useState<LoanWithPerson[]>([]);
   const [dueBills, setDueBills]           = useState<Bill[]>([]);
   const [allTags, setAllTags]             = useState<Tag[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const [modalVisible, setModalVisible]   = useState(false);
   const [txType, setTxType]               = useState<'expense' | 'income' | 'transfer'>('expense');
@@ -60,7 +62,7 @@ export default function HomeScreen() {
   const [notes, setNotes]                 = useState('');
   const [selTagIds, setSelTagIds]         = useState<string[]>([]);
 
-  const { expenses, fetchExpenses, createExpense, createTransfer, getCategories, getAccounts, getMonthSummary, searchExpenses, getLoansForMonth, getDueBills, getTags, setTagsForExpense } = useExpenses();
+  const { expenses, fetchExpenses, createExpense, createTransfer, getCategories, getAccounts, getMonthSummary, searchExpenses, getLoansForMonth, getDueBills, getTags, setTagsForExpense, dbRevision } = useExpenses();
   const { t, lang } = useI18n();
   const router = useRouter();
   const layout = useLayout();
@@ -70,12 +72,18 @@ export default function HomeScreen() {
   const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const load = useCallback(async () => {
-    const [s, loans, bills] = await Promise.all([getMonthSummary(year, month), getLoansForMonth(year, month), getDueBills()]);
-    await fetchExpenses(year, month);
-    setSummary(s); setMonthLoans(loans); setDueBills(bills);
+    try {
+      const [s, loans, bills] = await Promise.all([getMonthSummary(year, month), getLoansForMonth(year, month), getDueBills()]);
+      await fetchExpenses(year, month);
+      setSummary(s); setMonthLoans(loans); setDueBills(bills);
+    } finally {
+      setInitialLoading(false);
+    }
   }, [year, month, fetchExpenses, getMonthSummary, getLoansForMonth, getDueBills]);
 
   useEffect(() => { load(); }, [load]);
+  // Recargar cuando se importan datos de otro dispositivo (sync).
+  useEffect(() => { if (dbRevision > 0) load(); }, [dbRevision]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const q = searchQuery.trim();
@@ -139,6 +147,15 @@ export default function HomeScreen() {
   // On desktop/tablet: 2-column transaction list
   const itemPad = isWide ? 20 : 16;
 
+  if (initialLoading) {
+    return (
+      <View style={s.container}>
+        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+        <Loader label={t.common.loading} />
+      </View>
+    );
+  }
+
   return (
     <View style={s.container}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
@@ -153,11 +170,11 @@ export default function HomeScreen() {
             {/* Month selector */}
             <View style={s.monthRow}>
               <Pressable onPress={prevMonth} hitSlop={12} style={s.monthArrow}>
-                <ChevronLeft size={20} color={C.textSec} />
+                <Ionicons name="chevron-back-outline" size={20} color={C.textSec} />
               </Pressable>
               <Text style={s.monthLabel}>{MONTHS[month-1]} {year}</Text>
               <Pressable onPress={nextMonth} hitSlop={12} style={s.monthArrow}>
-                <ChevronRight size={20} color={C.textSec} />
+                <Ionicons name="chevron-forward-outline" size={20} color={C.textSec} />
               </Pressable>
             </View>
 
@@ -184,7 +201,7 @@ export default function HomeScreen() {
             {/* Bills bar */}
             {dueBills.length > 0 && (
               <Pressable style={s.billsBar} onPress={() => router.push('/(tabs)/config')}>
-                <Bell size={14} color={C.warn} />
+                <Ionicons name="notifications-outline" size={14} color={C.warn} />
                 <Text style={s.billsBarText} numberOfLines={1}>
                   {dueBills.slice(0,2).map(b=>{const d=daysUntil(b.next_date);return `${b.name} ${d<=0?`(${t.bills.overdue})`:`(${d}d)`}`;}).join('  ·  ')}
                   {dueBills.length>2&&`  +${dueBills.length-2}`}
@@ -194,7 +211,7 @@ export default function HomeScreen() {
 
             {/* Search */}
             <View style={s.searchWrap}>
-              <Search size={16} color={C.textDim} style={{ marginRight: S.sm }} />
+              <Ionicons name="search-outline" size={16} color={C.textDim} style={{ marginRight: S.sm }} />
               <TextInput
                 style={s.searchInput}
                 placeholder={t.expenses.search}
@@ -204,7 +221,7 @@ export default function HomeScreen() {
               />
               {searchQuery.length>0 && (
                 <Pressable onPress={() => setSearchQuery('')} hitSlop={10}>
-                  <X size={16} color={C.textDim} />
+                  <Ionicons name="close-outline" size={16} color={C.textDim} />
                 </Pressable>
               )}
             </View>
@@ -235,7 +252,7 @@ export default function HomeScreen() {
           if (isTransfer) {
             return (
               <Pressable style={({ pressed }) => [s.row, { paddingHorizontal: itemPad }, pressed && s.rowPressed]} onPress={() => router.push(`/expense/${exp.expense_id}`)} android_ripple={{ color: C.surfaceHigh }}>
-                <View style={s.transferAvatar}><ArrowLeftRight size={17} color={C.transfer} /></View>
+                <View style={s.transferAvatar}><Ionicons name="swap-horizontal-outline" size={17} color={C.transfer} /></View>
                 <View style={s.rowBody}>
                   <Text style={s.rowTitle} numberOfLines={1}>{exp.description}</Text>
                   <Text style={[s.rowSub, { color: C.transfer }]}>{getAccName(exp.account_id)} → {getAccName(exp.destination_account_id)}</Text>
@@ -270,7 +287,7 @@ export default function HomeScreen() {
         onPress={handleOpenModal}
         android_ripple={{ color: C.accentPress, borderless: false, radius: 28 }}
       >
-        <Plus size={26} color="#fff" strokeWidth={2.5} />
+        <Ionicons name="add-outline" size={26} color="#fff" />
       </Pressable>
 
       <AdBanner />

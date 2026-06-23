@@ -1,0 +1,282 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-04T00:00:00Z",
+  "title": "Design System: Segato — Control de Gastos",
+  "extensions": {
+    "colorMeta": {
+      "precision-indigo": {
+        "role": "primary",
+        "displayName": "Precision Indigo",
+        "canonical": "oklch(0.58 0.22 267)",
+        "semanticTint": "rgba(91,124,246,0.15)",
+        "tonalRamp": ["#0A0D1F", "#111627", "#1B2142", "#2A3468", "#3F53B0", "#5B7CF6", "#8EA6FF", "#C4D3FF"]
+      },
+      "precision-indigo-press": {
+        "role": "primary-active",
+        "displayName": "Precision Indigo (Pressed)",
+        "canonical": "oklch(0.52 0.21 267)",
+        "tonalRamp": ["#080B1A", "#0F1320", "#16193A", "#232C5D", "#3548A2", "#4A68DC", "#7E98F8", "#C0CCFF"]
+      },
+      "cleared-green": {
+        "role": "secondary",
+        "displayName": "Cleared Green",
+        "canonical": "oklch(0.79 0.22 163)",
+        "semanticTint": "rgba(16,217,130,0.13)",
+        "tonalRamp": ["#021410", "#031E17", "#05301F", "#084D30", "#0A7846", "#10D982", "#5FFAB4", "#A8FDD9"]
+      },
+      "deficit-red": {
+        "role": "secondary",
+        "displayName": "Deficit Red",
+        "canonical": "oklch(0.54 0.24 20)",
+        "semanticTint": "rgba(246,68,88,0.13)",
+        "tonalRamp": ["#220407", "#380610", "#570A15", "#801525", "#C01D35", "#F64458", "#F98898", "#FCCAD1"]
+      },
+      "transfer-violet": {
+        "role": "tertiary",
+        "displayName": "Transfer Violet",
+        "canonical": "oklch(0.72 0.18 287)",
+        "semanticTint": "rgba(167,139,250,0.13)",
+        "tonalRamp": ["#0F0B1E", "#18112E", "#271C4E", "#3A2876", "#5E40BF", "#A78BFA", "#C9B9FD", "#E8E1FF"]
+      },
+      "warn-amber": {
+        "role": "tertiary",
+        "displayName": "Warn Amber",
+        "canonical": "oklch(0.77 0.19 75)",
+        "semanticTint": "rgba(245,158,11,0.13)",
+        "tonalRamp": ["#1A1200", "#2B1E00", "#422F00", "#633C00", "#9A6500", "#F59E0B", "#F9C55A", "#FDE8A8"]
+      },
+      "loan-orange": {
+        "role": "tertiary",
+        "displayName": "Loan Orange",
+        "canonical": "oklch(0.74 0.18 55)",
+        "semanticTint": "rgba(251,146,60,0.13)",
+        "tonalRamp": ["#1E0C00", "#321400", "#4F2100", "#7A3600", "#BC6610", "#FB923C", "#FDB97A", "#FEE0BF"]
+      },
+      "abyss": {
+        "role": "neutral",
+        "displayName": "Abyss",
+        "canonical": "oklch(0 0 0)",
+        "tonalRamp": ["#000000", "#080808", "#111111", "#181818", "#202020", "#2E2E2E", "#4A4A4A", "#787878"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "oklch(0.08 0 0)",
+        "tonalRamp": ["#000000", "#080808", "#0D0D0D", "#141414", "#1E1E1E", "#2A2A2A", "#404040", "#6A6A6A"]
+      },
+      "surface-up": {
+        "role": "neutral",
+        "displayName": "Surface Up",
+        "canonical": "oklch(0.13 0 0)",
+        "tonalRamp": ["#050505", "#0A0A0A", "#111111", "#161616", "#1E1E1E", "#2A2A2A", "#3E3E3E", "#5C5C5C"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(0.95 0.015 267)",
+        "tonalRamp": ["#1A1C2E", "#252840", "#323558", "#444870", "#5C608A", "#8895B3", "#C0C8E0", "#EEF2FF"]
+      },
+      "ink-sec": {
+        "role": "neutral",
+        "displayName": "Ink Secondary",
+        "canonical": "oklch(0.61 0.04 252)",
+        "tonalRamp": ["#101320", "#181C30", "#222745", "#313659", "#444C70", "#8895B3", "#B8C2D8", "#E0E6F0"]
+      },
+      "ink-dim": {
+        "role": "neutral",
+        "displayName": "Ink Dim",
+        "canonical": "oklch(0.42 0.05 252)",
+        "tonalRamp": ["#0A0D1A", "#131728", "#1C2238", "#262D4A", "#35405E", "#4E5A78", "#7585A8", "#A8B5CF"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Monetary totals and balance figures. The largest text on screen. 800 weight is reserved strictly for financial amounts." },
+      "headline": { "displayName": "Headline", "purpose": "Major section totals in stats. One per view maximum." },
+      "title": { "displayName": "Title", "purpose": "Sheet titles, modal headers. Marks a context change." },
+      "body": { "displayName": "Body", "purpose": "Transaction descriptions (600 weight primary) and secondary metadata (400 weight). Primary reading size throughout the list." },
+      "label": { "displayName": "Label", "purpose": "Form field labels, tab bar labels, chip text. 13px, 600 weight." },
+      "caption": { "displayName": "Caption", "purpose": "Summary card column headers. Uppercase permitted here only — three-word financial column headers at 11px." }
+    },
+    "shadows": [
+      {
+        "name": "ambient-low",
+        "value": "shadowColor: #000, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.30, shadowRadius: 4, elevation: 3",
+        "webValue": "0 2px 4px rgba(0,0,0,0.30)",
+        "purpose": "Subtle surface lift for non-AMOLED rendering (web, Electron on light OS)."
+      },
+      {
+        "name": "ambient-mid",
+        "value": "shadowColor: #000, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.40, shadowRadius: 8, elevation: 6",
+        "webValue": "0 4px 8px rgba(0,0,0,0.40)",
+        "purpose": "Heavier lift for dialogs and sheets in non-AMOLED contexts."
+      },
+      {
+        "name": "accent-glow",
+        "value": "shadowColor: #5B7CF6, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 8",
+        "webValue": "0 4px 12px rgba(91,124,246,0.35)",
+        "purpose": "FAB only. The sole colored shadow in the system. Anchors the primary action above scrolling content."
+      }
+    ],
+    "motion": [
+      {
+        "name": "press-feedback",
+        "value": "immediate background color shift, no animation",
+        "purpose": "Row and button press states. Firmness is the interaction language — no spring, no bounce, no delay."
+      },
+      {
+        "name": "sheet-slide",
+        "value": "animationType: slide (React Native Modal), ~280ms",
+        "purpose": "Bottom sheet entrance for modals, dropdowns. Slides up from off-screen."
+      },
+      {
+        "name": "list-entry",
+        "value": "FadeIn.duration(300).springify()",
+        "purpose": "Transaction row entrance via Reanimated. Used for swipeable list items."
+      },
+      {
+        "name": "list-exit",
+        "value": "FadeOut.duration(200)",
+        "purpose": "Transaction row exit via Reanimated."
+      },
+      {
+        "name": "standard-transition",
+        "value": "150–200ms, ease-out",
+        "purpose": "State transitions: tab changes, navigation. Short; users are in task flow."
+      }
+    ],
+    "breakpoints": [
+      { "name": "phone", "value": "< 768px", "behavior": "Bottom tab bar, single-column form, full-width sheets" },
+      { "name": "tablet", "value": "768px – 1023px", "behavior": "Wider layout, 2-column form in sheets, FAB at 32px margins" },
+      { "name": "desktop", "value": "≥ 1024px", "behavior": "Left sidebar (220px), tab bar hidden, sheets as centered dialogs (max 720px)" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Floating Action Button",
+      "kind": "button",
+      "refersTo": "fab",
+      "description": "Primary action trigger. Adds a new transaction. Fixed bottom-right; the only element with an accent glow shadow.",
+      "html": "<button class=\"ds-fab\" aria-label=\"Add transaction\"><svg width=\"26\" height=\"26\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"white\" stroke-width=\"2.5\" stroke-linecap=\"round\"><line x1=\"12\" y1=\"5\" x2=\"12\" y2=\"19\"/><line x1=\"5\" y1=\"12\" x2=\"19\" y2=\"12\"/></svg></button>",
+      "css": ".ds-fab { width: 58px; height: 58px; border-radius: 9999px; background: #5B7CF6; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(91,124,246,0.35); transition: background 0.15s, box-shadow 0.15s; } .ds-fab:hover { background: #4A68DC; box-shadow: 0 6px 16px rgba(91,124,246,0.45); } .ds-fab:active { background: #4A68DC; transform: scale(0.96); } .ds-fab:focus-visible { outline: 2px solid #5B7CF6; outline-offset: 3px; }"
+    },
+    {
+      "name": "Transaction Row",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Primary content unit. Horizontal flex: category avatar + description/date body + right-aligned amount. Color of amount and avatar determined by transaction type.",
+      "html": "<div class=\"ds-tx-row\"><div class=\"ds-tx-avatar\" style=\"background:rgba(16,217,130,0.13)\"><span class=\"ds-tx-avatar-letter\" style=\"color:#10D982\">A</span></div><div class=\"ds-tx-body\"><span class=\"ds-tx-title\">Supermercado</span><span class=\"ds-tx-meta\">4 Jun</span></div><span class=\"ds-tx-amount ds-tx-expense\">-$850.00</span></div>",
+      "css": ".ds-tx-row { display: flex; align-items: center; gap: 12px; padding: 13px 16px; background: #000000; border-bottom: 1px solid #111111; cursor: pointer; transition: background 0.1s; } .ds-tx-row:hover, .ds-tx-row:active { background: #1E1E1E; } .ds-tx-avatar { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; } .ds-tx-avatar-letter { font-size: 15px; font-weight: 700; } .ds-tx-body { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; } .ds-tx-title { font-size: 15px; font-weight: 600; color: #EEF2FF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-tx-meta { font-size: 13px; color: #8895B3; } .ds-tx-amount { font-size: 17px; font-weight: 700; white-space: nowrap; } .ds-tx-expense { color: #F64458; } .ds-tx-income { color: #10D982; } .ds-tx-transfer { color: #A78BFA; } .ds-tx-loan { color: #FB923C; }"
+    },
+    {
+      "name": "Summary Card",
+      "kind": "card",
+      "refersTo": null,
+      "description": "Three-column overview of monthly income, balance, and expenses. The largest amounts on screen use Display type (800 weight). Flanking columns use headline weight.",
+      "html": "<div class=\"ds-summary\"><div class=\"ds-summary-cell\"><span class=\"ds-summary-cap\">INGRESOS</span><span class=\"ds-summary-val\" style=\"color:#10D982\">$8,200.00</span></div><div class=\"ds-summary-div\"></div><div class=\"ds-summary-cell\"><span class=\"ds-summary-cap\">SALDO</span><span class=\"ds-summary-bal\" style=\"color:#10D982\">$3,750.00</span></div><div class=\"ds-summary-div\"></div><div class=\"ds-summary-cell\"><span class=\"ds-summary-cap\">GASTOS</span><span class=\"ds-summary-val\" style=\"color:#F64458\">$4,450.00</span></div></div>",
+      "css": ".ds-summary { display: flex; align-items: center; background: #0D0D0D; border: 1px solid #202020; border-radius: 14px; padding: 16px; } .ds-summary-cell { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; } .ds-summary-cap { font-size: 11px; font-weight: 500; color: #4E5A78; text-transform: uppercase; letter-spacing: 0.5px; } .ds-summary-val { font-size: 17px; font-weight: 700; } .ds-summary-bal { font-size: 34px; font-weight: 800; line-height: 1.1; letter-spacing: -0.5px; } .ds-summary-div { width: 1px; height: 36px; background: #202020; }"
+    },
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "btn-save",
+      "description": "Save / confirm action. Full-width in sheet footers, always paired with the Cancel button.",
+      "html": "<button class=\"ds-btn-save\">Guardar</button>",
+      "css": ".ds-btn-save { padding: 14px 20px; background: #5B7CF6; color: #EEF2FF; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.15s; width: 100%; } .ds-btn-save:hover { background: #4A68DC; } .ds-btn-save:active { background: #4A68DC; transform: scale(0.98); } .ds-btn-save:focus-visible { outline: 2px solid #5B7CF6; outline-offset: 3px; }"
+    },
+    {
+      "name": "Cancel Button",
+      "kind": "button",
+      "refersTo": "btn-cancel",
+      "description": "Dismiss / cancel action. Signals reversibility without competing visually with the primary action.",
+      "html": "<button class=\"ds-btn-cancel\">Cancelar</button>",
+      "css": ".ds-btn-cancel { padding: 14px 20px; background: #161616; color: #8895B3; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.15s; width: 100%; } .ds-btn-cancel:hover { background: #1E1E1E; } .ds-btn-cancel:active { background: #1E1E1E; } .ds-btn-cancel:focus-visible { outline: 2px solid #8895B3; outline-offset: 3px; }"
+    },
+    {
+      "name": "Type Chip",
+      "kind": "chip",
+      "refersTo": "chip-type-default",
+      "description": "Transaction type selector: expense / income / transfer. Three equal cells. Active state shows semantic color background tint, border, and text.",
+      "html": "<div class=\"ds-chip-row\"><button class=\"ds-chip-type ds-chip-expense-active\">Gasto</button><button class=\"ds-chip-type\">Ingreso</button><button class=\"ds-chip-type\">Transferencia</button></div>",
+      "css": ".ds-chip-row { display: flex; gap: 8px; } .ds-chip-type { flex: 1; padding: 10px 0; background: transparent; color: #8895B3; border: 1.5px solid #202020; border-radius: 10px; font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; } .ds-chip-expense-active { background: rgba(246,68,88,0.13); border-color: #F64458; color: #F64458; font-weight: 700; } .ds-chip-income-active { background: rgba(16,217,130,0.13); border-color: #10D982; color: #10D982; font-weight: 700; } .ds-chip-transfer-active { background: rgba(167,139,250,0.13); border-color: #A78BFA; color: #A78BFA; font-weight: 700; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Standard text field. Surface Up background at rest; Precision Indigo border on focus. Placeholder in Ink Dim.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field-label\">Descripción <span class=\"ds-req\">*</span></label><input class=\"ds-input\" type=\"text\" placeholder=\"Ej. Supermercado\" /></div>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; } .ds-field-label { font-size: 13px; font-weight: 600; color: #8895B3; } .ds-req { color: #F64458; } .ds-input { background: #161616; border: 1px solid #202020; border-radius: 10px; padding: 12px 14px; font-size: 15px; color: #EEF2FF; outline: none; transition: border-color 0.15s; width: 100%; box-sizing: border-box; } .ds-input::placeholder { color: #4E5A78; } .ds-input:focus { border-color: #5B7CF6; } .ds-input:invalid { border-color: #F64458; }"
+    },
+    {
+      "name": "Sidebar Nav Item",
+      "kind": "nav",
+      "refersTo": "nav-item-active",
+      "description": "Desktop sidebar navigation. Active item: indigo background tint, indigo text, 3px right-edge indicator bar. Inactive: transparent, dim text.",
+      "html": "<nav class=\"ds-sidebar-nav\"><div class=\"ds-nav-item ds-nav-active\"><svg class=\"ds-nav-icon\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#5B7CF6\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"5\" width=\"20\" height=\"14\" rx=\"2\"/><line x1=\"2\" y1=\"10\" x2=\"22\" y2=\"10\"/></svg><span class=\"ds-nav-label ds-nav-label-active\">Gastos</span><div class=\"ds-nav-bar\"></div></div><div class=\"ds-nav-item\"><svg class=\"ds-nav-icon\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#4E5A78\" stroke-width=\"2\" stroke-linecap=\"round\"><line x1=\"18\" y1=\"20\" x2=\"18\" y2=\"10\"/><line x1=\"12\" y1=\"20\" x2=\"12\" y2=\"4\"/><line x1=\"6\" y1=\"20\" x2=\"6\" y2=\"14\"/></svg><span class=\"ds-nav-label\">Estadísticas</span></div></nav>",
+      "css": ".ds-sidebar-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 8px; } .ds-nav-item { display: flex; align-items: center; padding: 11px 12px; border-radius: 10px; cursor: pointer; position: relative; overflow: hidden; transition: background 0.15s; } .ds-nav-item:hover { background: #161616; } .ds-nav-active { background: rgba(91,124,246,0.15); } .ds-nav-icon { margin-right: 8px; flex-shrink: 0; } .ds-nav-label { font-size: 15px; font-weight: 500; color: #4E5A78; flex: 1; } .ds-nav-label-active { font-weight: 700; color: #5B7CF6; } .ds-nav-bar { position: absolute; right: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: #5B7CF6; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Personal Comptroller",
+    "overview": "Segato is built for the user who ends their day by reviewing the ledger — not to worry, but to know. The interface is a private instrument: dark by design, dense by purpose, immediate in every response. The true-black canvas (#000000) is literal: on AMOLED screens, black pixels are off and draw no power. Numbers stand in relief against the void.\n\nThe system rejects both ends of the consumer finance spectrum. Not Mint or Intuit: no notification badges competing for attention, no congratulatory messages for routine events. Not a banking app: no cold institutional palettes, no excessive whitespace. Not a SaaS dashboard: no hero metrics, no gradient text. The system most resembles a quality accounting book held in pocket form.\n\nColor strategy is Committed. The void carries roughly 70% of every screen. Five semantic hues carry fixed financial meanings. Precision Indigo, the sole non-semantic accent, earns its rarity: it marks exactly one thing at a time.",
+    "keyCharacteristics": [
+      "AMOLED-native true-black canvas — the background is the battery-saving feature",
+      "Semantic color vocabulary: every hue owns one financial meaning",
+      "Precision Indigo reserved exclusively for action and active state",
+      "System-native typeface; no display face competes with amounts",
+      "Firm, direct interactions: press feedback is immediate, transitions are short",
+      "Structurally responsive: bottom tabs on mobile, left sidebar on desktop"
+    ],
+    "rules": [
+      {
+        "name": "The One Voice Rule",
+        "body": "Precision Indigo occupies ≤15% of any screen. A new component that reaches for indigo as decoration rather than as action or selection is wrong; rewrite it using surface colors and borders.",
+        "section": "colors"
+      },
+      {
+        "name": "The Semantic Contract",
+        "body": "Each hue owns exactly one financial meaning: green = income, red = expense, violet = transfer, amber = due-bill warning, orange = loan. Using any color outside its assigned meaning breaks the mental model the user built on screen one.",
+        "section": "colors"
+      },
+      {
+        "name": "The Data-First Rule",
+        "body": "800 font weight is reserved for monetary amounts. No heading, label, or UI string may use 800 weight unless it is a number representing money or a derived financial figure.",
+        "section": "typography"
+      },
+      {
+        "name": "The Single Family Rule",
+        "body": "Adding a second font family is prohibited. The system font stack is the typeface decision. Display faces and custom fonts compete with the numbers; the numbers must win.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Surfaces are flat at rest. Tonal layering conveys structure; shadows convey state or exception. A shadow on a resting surface card or row is a design error.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use Precision Indigo (#5B7CF6) only for primary actions, active navigation, and selection. Its rarity is its authority.",
+      "Do apply semantic colors (green, red, violet, amber, orange) strictly to their assigned financial meanings.",
+      "Do keep #000000 as the page background on every screen.",
+      "Do use 800 font weight only for monetary amounts.",
+      "Do use the four-step surface ramp (#000000 → #0D0D0D → #161616 → #1E1E1E) for all depth.",
+      "Do add the Accent Glow shadow (#5B7CF6 at 35%) to the FAB only.",
+      "Do shift press state to Surface High (#1E1E1E) instantly with no transition delay on list rows.",
+      "Do use rgba(color, 0.13–0.15) for semantic color background tints.",
+      "Do use the sidebar on desktop (≥1024px) and the bottom tab bar on mobile."
+    ],
+    "donts": [
+      "Don't use Precision Indigo as a decorative fill, background wash, or illustration element.",
+      "Don't use gradient text (background-clip: text with a gradient).",
+      "Don't use border-left or border-right wider than 1px as a colored accent stripe.",
+      "Don't add glassmorphism (backdrop-filter: blur) decoratively.",
+      "Don't build a hero-metric layout: large number, small label, gradient accent, stats grid.",
+      "Don't imitate Mint or Intuit: no badges competing for attention, no promotional content in the transaction flow.",
+      "Don't imitate banking apps: no cold institutional palettes, no excessive whitespace.",
+      "Don't imitate neon crypto wallets: no purple-to-cyan gradients, no glowing text or borders.",
+      "Don't add a second font family.",
+      "Don't use Warn Amber or Loan Orange outside their defined financial contexts.",
+      "Don't introduce a fifth depth level or an off-ramp surface color."
+    ]
+  }
+}

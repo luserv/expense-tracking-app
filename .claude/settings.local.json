@@ -29,7 +29,29 @@
       "Bash(python3 -c \"import json,sys; p=json.load\\(sys.stdin\\); print\\('exports:', json.dumps\\(p.get\\('exports', 'NONE'\\), indent=2\\)[:500]\\); print\\('main:', p.get\\('main','NONE'\\)\\)\")",
       "Skill(impeccable)",
       "Bash(python3 *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(npx asar *)",
+      "Bash(npx electron-builder *)",
+      "Bash(sed -n '74,82p' app/\\\\\\(tabs\\\\\\)/config.tsx)",
+      "Bash(sed -n '971,985p' app/\\\\\\(tabs\\\\\\)/config.tsx)",
+      "Bash(sed -n '1058,1064p' app/\\\\\\(tabs\\\\\\)/config.tsx)",
+      "Bash(sed -n '1,12p' app/\\\\\\(tabs\\\\\\)/config.tsx)",
+      "Bash(npm run *)",
+      "Bash(convert assets/Chiro/chiro-simbolo-azul-1024.png -format \"%[pixel:p{0,0}]\" info:)",
+      "Bash(convert assets/Chiro/chiro-simbolo-azul-1024.png -fuzz 5% -trim info:)",
+      "Bash(convert assets/Chiro/chiro-simbolo-claro-1024.png -fuzz 5% -trim info:)",
+      "Bash(magick chiro-simbolo-azul-1024.png -fuzz 2% -trim +repage -resize 600x600 -background \"#fcfcfd\" -gravity center -extent 1024x1024 chiro-adaptive-fg-1024.png)",
+      "Bash(magick chiro-simbolo-claro-1024.png -fuzz 2% -trim +repage -resize 600x600 -background none -gravity center -extent 1024x1024 chiro-adaptive-mono-1024.png)",
+      "Bash(identify chiro-adaptive-fg-1024.png chiro-adaptive-mono-1024.png)",
+      "Bash(magick chiro-adaptive-fg-1024.png -fuzz 2% -trim info:)",
+      "Bash(magick chiro-adaptive-mono-1024.png -format \"alpha=%[channels] mean_alpha=%[fx:mean.a]\" info:)",
+      "Bash(magick chiro-adaptive-mono-1024.png -alpha extract -format \"corner=%[pixel:p{0,0}] center=%[pixel:p{512,400}]\" info:)",
+      "WebSearch",
+      "Bash(gh api *)",
+      "WebFetch(domain:impeccable.style)",
+      "Bash(npx impeccable *)",
+      "Bash(pnpm approve-builds *)",
+      "Bash(pnpm exec *)"
     ]
   }
 }
