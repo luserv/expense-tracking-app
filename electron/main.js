@@ -88,9 +88,8 @@ ipcMain.handle('db:mergeFromBase64', (_event, base64) => {
   const tmpPath = path.join(userDataPath, '_sync_remote.db');
   try {
     fs.writeFileSync(tmpPath, Buffer.from(base64, 'base64'));
-    // Validate path contains only safe characters before interpolating into SQL.
-    const safePath = tmpPath.replace(/[^a-zA-Z0-9._/\-]/g, '');
-    db.exec(`ATTACH DATABASE '${safePath.replace(/'/g, "''")}' AS remote`);
+    // Bound parameter: works with any path (spaces, accents) and never builds SQL from it.
+    db.prepare('ATTACH DATABASE ? AS remote').run(tmpPath);
     const merge = db.transaction(() => {
       for (const { table, pk } of SYNC_TABLES) {
         const localCols = db.prepare(`PRAGMA table_info(${table})`).all().map(r => r.name);
