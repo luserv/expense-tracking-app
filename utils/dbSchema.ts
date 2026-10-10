@@ -1,15 +1,15 @@
 /**
  * Esquema de base de datos — FUENTE ÚNICA compartida.
  *
- * CommonJS a propósito: lo consumen dos runtimes distintos
- *   - RN/Metro (Android)  → utils/dbInit.ts lo importa
- *   - Electron main (Node) → electron/main.js lo requiere
+ * Consumed by two runtimes:
+ *   - RN/Metro (Android)   → imported by utils/dbInit.ts and utils/db.native.ts
+ *   - Electron main (Node) → compiled by tsconfig.electron.json and imported by electron/main.ts
  *
  * Toda tabla lleva `updated_at` (epoch ms) y `deleted` (tombstone 0/1) para
  * habilitar la sincronización por registro (último-en-escribir-gana por fila).
  */
 
-const CREATE_TABLES = [
+export const CREATE_TABLES: string[] = [
   `CREATE TABLE IF NOT EXISTS account (
     account_id   TEXT PRIMARY KEY,
     name         TEXT NOT NULL,
@@ -142,7 +142,7 @@ const CREATE_TABLES = [
   );`,
 ];
 
-const CREATE_INDEXES = [
+export const CREATE_INDEXES: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_expense_date     ON expense(date);`,
   `CREATE INDEX IF NOT EXISTS idx_expense_category ON expense(category_id);`,
   `CREATE INDEX IF NOT EXISTS idx_expense_account  ON expense(account_id);`,
@@ -157,7 +157,7 @@ const CREATE_INDEXES = [
 ];
 
 // Migraciones idempotentes para instalaciones existentes (cada una va en try/catch).
-const MIGRATIONS = [
+export const MIGRATIONS: string[] = [
   "ALTER TABLE loan ADD COLUMN interest_rate REAL DEFAULT 0",
   "ALTER TABLE loan ADD COLUMN interest_type TEXT DEFAULT 'simple'",
   "ALTER TABLE loan ADD COLUMN months INTEGER DEFAULT 1",
@@ -175,7 +175,7 @@ const MIGRATIONS = [
   ]),
 ];
 
-const SEED = [
+export const SEED: string[] = [
   `INSERT OR IGNORE INTO account (account_id, name, currency, account_type) VALUES
     ('acc_cash', 'Efectivo', 'USD', 'asset'),
     ('acc_bank', 'Banco',    'USD', 'asset');`,
@@ -198,7 +198,12 @@ const SEED = [
 ];
 
 /** Lista de tablas sincronizables con su clave primaria, para el motor de merge. */
-const SYNC_TABLES = [
+export interface SyncTable {
+  table: string;
+  pk: string[];
+}
+
+export const SYNC_TABLES: SyncTable[] = [
   { table: 'account',     pk: ['account_id'] },
   { table: 'category',    pk: ['category_id'] },
   { table: 'expense',     pk: ['expense_id'] },
@@ -219,7 +224,7 @@ const SYNC_TABLES = [
  * (último-en-escribir-gana por registro). `cols` es la intersección de columnas
  * entre la DB local y la remota (robusto ante orden/versión distintos).
  */
-function buildMergeStatement(table, pk, cols) {
+export function buildMergeStatement(table: string, pk: string[], cols: string[]): string {
   const colList = cols.join(', ');
   const nonPk = cols.filter((c) => !pk.includes(c));
   const setClause = nonPk.map((c) => `${c}=excluded.${c}`).join(', ');
@@ -230,5 +235,3 @@ function buildMergeStatement(table, pk, cols) {
     `WHERE excluded.updated_at > ${table}.updated_at`
   );
 }
-
-module.exports = { CREATE_TABLES, CREATE_INDEXES, MIGRATIONS, SEED, SYNC_TABLES, buildMergeStatement };

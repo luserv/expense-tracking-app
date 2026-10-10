@@ -55,6 +55,7 @@ data/
 
 # Electron build output
 release/
+electron-build/
 
 # Production keystore
 android/app/release.keystore

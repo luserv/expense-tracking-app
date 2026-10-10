@@ -2,8 +2,8 @@
  * Inicialización del esquema de base de datos — Control de Gastos.
  * Compatible con expo-sqlite (native) y el adaptador IPC de Electron.
  *
- * El esquema vive en una FUENTE ÚNICA (utils/dbSchema.js, CommonJS) que también
- * consume electron/main.js, para no duplicar/derivar definiciones entre runtimes.
+ * El esquema vive en una FUENTE ÚNICA (utils/dbSchema.ts) que también
+ * consume electron/main.ts, para no duplicar/derivar definiciones entre runtimes.
  */
 import { CREATE_INDEXES, CREATE_TABLES, MIGRATIONS, SEED } from './dbSchema';
 

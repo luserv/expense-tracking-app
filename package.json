@@ -13,11 +13,13 @@
     "sqlite:seed": "node scripts/init-sqlite.mjs --seed",
     "generate:ico": "node scripts/generate-ico.mjs",
     "electron:rebuild": "electron-rebuild -f -w better-sqlite3",
-    "electron:dev": "cross-env NODE_ENV=development electron electron/main.js",
-    "electron:build": "expo export --platform web --output-dir dist && node electron/fix-assets.js && electron-builder --config electron-builder.json",
-    "electron:win": "expo export --platform web --output-dir dist && node electron/fix-assets.js && electron-builder --win --config electron-builder.json",
-    "electron:mac": "expo export --platform web --output-dir dist && node electron/fix-assets.js && electron-builder --mac --config electron-builder.json",
-    "electron:linux": "expo export --platform web --output-dir dist && node electron/fix-assets.js && electron-builder --linux --config electron-builder.json"
+    "electron:compile": "tsc -p tsconfig.electron.json",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "electron:dev": "npm run electron:compile && cross-env NODE_ENV=development electron electron-build/electron/main.js",
+    "electron:build": "npm run electron:compile && expo export --platform web --output-dir dist && node electron/fix-assets.js && electron-builder --config electron-builder.json",
+    "electron:win": "npm run electron:compile && expo export --platform web --output-dir dist && node electron/fix-assets.js && electron-builder --win --config electron-builder.json",
+    "electron:mac": "npm run electron:compile && expo export --platform web --output-dir dist && node electron/fix-assets.js && electron-builder --mac --config electron-builder.json",
+    "electron:linux": "npm run electron:compile && expo export --platform web --output-dir dist && node electron/fix-assets.js && electron-builder --linux --config electron-builder.json"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",

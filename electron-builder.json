@@ -6,8 +6,8 @@
     "buildResources": "assets"
   },
   "files": [
-    "electron/**/*",
-    "utils/dbSchema.js",
+    "electron/splash.html",
+    "electron-build/**/*",
     "dist/**/*",
     "!dist/**/*.map",
     "!node_modules/**/*",
@@ -18,7 +18,7 @@
     "node_modules/file-uri-to-path/**/*"
   ],
   "extraMetadata": {
-    "main": "electron/main.js",
+    "main": "electron-build/electron/main.js",
     "dependencies": {},
     "optionalDependencies": {}
   },
