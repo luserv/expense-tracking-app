@@ -1,5 +1,6 @@
 /** Repo de cuotas (installments). Programación de pagos con vencimiento y atraso. */
 import { db } from '../db';
+import { allocatePayments } from './paymentAllocation';
 import type { Installment, LoanFrequency } from './types';
 
 /**
@@ -212,22 +213,16 @@ export async function migrateLoansToInstallments(): Promise<void> {
       const pays = await db.getAllAsync<{ amount: number; date: string }>(
         'SELECT amount, date FROM payment WHERE loan_id=? AND deleted=0 ORDER BY date ASC', loan.loan_id
       );
-      let remaining = Math.round(pays.reduce((s, p) => s + p.amount, 0) * 100) / 100;
-      const lastPayDate = pays.length ? pays[pays.length - 1].date : null;
+      const allocations = allocatePayments(amounts, pays);
       const ts = Date.now();
 
       for (let i = 0; i < n; i++) {
-        let pa = 0, pd: string | null = null;
-        if (remaining > 0) {
-          pa = Math.min(amounts[i], remaining);
-          remaining = Math.round((remaining - pa) * 100) / 100;
-          pd = lastPayDate; // mejor proxy de fecha disponible
-        }
+        const { paidAmount, paidDate } = allocations[i];
         await db.runAsync(
           `INSERT OR IGNORE INTO installment
             (installment_id, loan_id, number, due_date, amount, paid_date, paid_amount, updated_at, deleted)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-          installmentId(loan.loan_id, i + 1), loan.loan_id, i + 1, advanceByFreq(firstDue, freq, i), amounts[i], pd, pa, ts
+          installmentId(loan.loan_id, i + 1), loan.loan_id, i + 1, advanceByFreq(firstDue, freq, i), amounts[i], paidDate, paidAmount, ts
         );
       }
       await recomputeLoanPaid(loan.loan_id);
