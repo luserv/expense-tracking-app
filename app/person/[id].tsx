@@ -54,6 +54,13 @@ function calcTotal(amount: number, rate: number): number {
   return amount + amount * (rate / 100);
 }
 
+/** Remaining balance of a loan (principal + interest) after its installment payments. */
+function calcLoanOutstanding(loan: Loan, installments: Installment[]): number {
+  const total = calcTotal(loan.amount, loan.interest_rate);
+  const paid = installments.reduce((sum, inst) => sum + inst.paid_amount, 0);
+  return Math.max(0, Math.round((total - paid) * 100) / 100);
+}
+
 type LoanModal = { mode: 'create' } | { mode: 'edit'; loan: Loan };
 type PayModal = { loan: Loan; inst: Installment; mode: 'pay' | 'edit'; cascadeFromId?: string; effectiveBalance?: number };
 
@@ -188,9 +195,7 @@ export default function PersonDetail() {
       // Monto efectivo: incluye arrastre de cuotas vencidas con pago parcial previas.
       const effective = computeEffectiveAmounts(list, today);
       const effInst = effective.find(i => i.installment_id === inst.installment_id) ?? fresh;
-      const loanTotal = loan.amount + loan.amount * (loan.interest_rate || 0) / 100;
-      const sumPaid = list.reduce((s, i) => s + i.paid_amount, 0);
-      const loanOutstanding = Math.max(0, Math.round((loanTotal - sumPaid) * 100) / 100);
+      const loanOutstanding = calcLoanOutstanding(loan, list);
       const cuotaEffective = Math.max(0, Math.round((effInst.amount - fresh.paid_amount) * 100) / 100);
       const toPayDefault = Math.min(cuotaEffective, loanOutstanding);
       setPayAmount(toPayDefault.toFixed(2));
@@ -208,6 +213,13 @@ export default function PersonDetail() {
     const isoDate = payDate;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) { alert(t.loans.dateRequired); return; }
     if (payModal.mode === 'pay') {
+      // The cascade can't apply more than the loan owes, so reject overpayments
+      // up front instead of silently dropping the excess.
+      const outstanding = calcLoanOutstanding(payModal.loan, await getInstallments(payModal.loan.loan_id));
+      if (Math.round(amt * 100) / 100 > outstanding) {
+        alert(`${t.loans.amountExceedsBalance} ${fmt(outstanding)}`);
+        return;
+      }
       await payInstallmentCascade(payModal.cascadeFromId ?? payModal.inst.installment_id, amt, isoDate);
     } else {
       await payInstallment(payModal.inst.installment_id, amt, isoDate);
