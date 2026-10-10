@@ -176,13 +176,16 @@ export async function updateTransfer(
 
 export async function getMonthSummary(year: number, month: number): Promise<MonthSummary> {
   try {
-    const prefix = `${year}-${String(month).padStart(2, '0')}`;
+    const start = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endMonth = month === 12 ? 1 : month + 1;
+    const endYear = month === 12 ? year + 1 : year;
+    const end = `${endYear}-${String(endMonth).padStart(2, '0')}-01`;
     const rows = await db.getAllAsync<{ type: string; total: number }>(
       `SELECT type, SUM(amount) as total
        FROM expense
-       WHERE deleted=0 AND date LIKE ? AND transfer_pair_id IS NULL
+       WHERE deleted=0 AND date >= ? AND date < ? AND transfer_pair_id IS NULL
        GROUP BY type`,
-      `${prefix}%`
+      start, end
     );
     const income = rows.find(r => r.type === 'income')?.total ?? 0;
     const expense = rows.find(r => r.type === 'expense')?.total ?? 0;
