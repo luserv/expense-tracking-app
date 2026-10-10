@@ -8,7 +8,12 @@
 function uuid(): string {
   const c = (globalThis as any).crypto;
   if (c?.randomUUID) return c.randomUUID();
-  // Fallback: 25+ chars de entropía (timestamp + dos randoms).
+  // Fallback: use crypto.getRandomValues if available, else Math.random.
+  if (c?.getRandomValues) {
+    const buf = new Uint8Array(16);
+    c.getRandomValues(buf);
+    return Array.from(buf, b => b.toString(16).padStart(2, '0')).join('');
+  }
   return (
     Date.now().toString(36) +
     Math.random().toString(36).slice(2, 12) +
