@@ -1,7 +1,7 @@
-const path = require('path');
-const fs = require('fs');
+import * as path from 'path';
+import * as fs from 'fs';
 
-const MIME_TYPES = {
+const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js':   'application/javascript',
   '.mjs':  'application/javascript',
@@ -20,7 +20,7 @@ const MIME_TYPES = {
   '.woff2':'font/woff2',
 };
 
-function isInside(rootPath, candidatePath) {
+function isInside(rootPath: string, candidatePath: string): boolean {
   const relative = path.relative(rootPath, candidatePath);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
@@ -28,8 +28,8 @@ function isInside(rootPath, candidatePath) {
 // Maps an app:// URL to a file inside distPath. Returns null when the decoded
 // path escapes distPath (e.g. "..%2f..%2fetc/passwd") or the URL is malformed.
 // Unknown in-bundle paths fall back to index.html so client-side routes work.
-function resolveAppFile(distPath, requestUrl) {
-  let relativePath;
+export function resolveAppFile(distPath: string, requestUrl: string): string | null {
+  let relativePath: string;
   try {
     relativePath = decodeURIComponent(new URL(requestUrl).pathname);
   } catch {
@@ -44,7 +44,7 @@ function resolveAppFile(distPath, requestUrl) {
   return isFile ? candidate : path.join(root, 'index.html');
 }
 
-function createAppProtocolHandler(getDistPath) {
+export function createAppProtocolHandler(getDistPath: () => string): (request: Request) => Response {
   return (request) => {
     const filePath = resolveAppFile(getDistPath(), request.url);
     if (!filePath) return new Response('Not found', { status: 404 });
@@ -66,5 +66,3 @@ function createAppProtocolHandler(getDistPath) {
     }
   };
 }
-
-module.exports = { resolveAppFile, createAppProtocolHandler };

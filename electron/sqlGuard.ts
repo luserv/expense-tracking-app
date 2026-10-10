@@ -8,17 +8,17 @@ const DATA_KEYWORDS = new Set([...READ_KEYWORDS, ...WRITE_KEYWORDS]);
 const TRANSACTION_CONTROL = /^\s*(BEGIN|COMMIT|ROLLBACK)\s*;?\s*$/i;
 const LEADING_TRIVIA = /^(?:\s+|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)*/;
 
-function leadingKeyword(sql) {
+function leadingKeyword(sql: string): string {
   // Strip whitespace and comments so "/* */ ATTACH ..." can't hide the verb.
   const match = /^[A-Za-z]+/.exec(sql.replace(LEADING_TRIVIA, ''));
   return match ? match[0].toUpperCase() : '';
 }
 
-function assertString(sql) {
+function assertString(sql: unknown): asserts sql is string {
   if (typeof sql !== 'string') throw new Error('SQL must be a string');
 }
 
-function assertKeywordIn(sql, allowed) {
+function assertKeywordIn(sql: unknown, allowed: ReadonlySet<string>): asserts sql is string {
   assertString(sql);
   const keyword = leadingKeyword(sql);
   if (!allowed.has(keyword)) {
@@ -26,14 +26,14 @@ function assertKeywordIn(sql, allowed) {
   }
 }
 
-const assertReadStatement = (sql) => assertKeywordIn(sql, READ_KEYWORDS);
-const assertDataStatement = (sql) => assertKeywordIn(sql, DATA_KEYWORDS);
+export const assertReadStatement: (sql: unknown) => asserts sql is string =
+  (sql) => assertKeywordIn(sql, READ_KEYWORDS);
+export const assertDataStatement: (sql: unknown) => asserts sql is string =
+  (sql) => assertKeywordIn(sql, DATA_KEYWORDS);
 
-function assertTransactionControl(sql) {
+export function assertTransactionControl(sql: unknown): asserts sql is string {
   assertString(sql);
   if (!TRANSACTION_CONTROL.test(sql)) {
     throw new Error('Only BEGIN, COMMIT or ROLLBACK can be executed directly');
   }
 }
-
-module.exports = { assertReadStatement, assertDataStatement, assertTransactionControl };
