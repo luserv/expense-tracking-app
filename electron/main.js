@@ -1,9 +1,12 @@
-const { app, BrowserWindow, ipcMain, protocol, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const url = require('url');
 const { CREATE_TABLES, CREATE_INDEXES, MIGRATIONS, SEED, SYNC_TABLES, buildMergeStatement } = require('../utils/dbSchema.js');
 const { assertReadStatement, assertDataStatement, assertTransactionControl } = require('./sqlGuard');
+const {
+  isGoogleAccountsUrl, isOAuthPopupUrl, isAppUrl, isExternalLink, ISOLATED_WEB_PREFERENCES, DEV_SERVER_ORIGIN,
+} = require('./navigationPolicy');
 
 protocol.registerSchemesAsPrivileged([
   // corsEnabled es CLAVE: los fonts (@font-face / FontFace API) se piden siempre en
@@ -170,6 +173,9 @@ ipcMain.handle('fs:exportDB', async () => {
 // ── IPC: Google OAuth (reemplaza signInWithPopup de Firebase) ─────────────────
 
 ipcMain.handle('auth:googleOAuth', (_event, { authUrl, redirectUri }) => {
+  if (!isGoogleAccountsUrl(authUrl)) {
+    return Promise.reject(new Error('OAuth URL must point to accounts.google.com'));
+  }
   return new Promise((resolve, reject) => {
     let handled = false;
 
@@ -177,7 +183,7 @@ ipcMain.handle('auth:googleOAuth', (_event, { authUrl, redirectUri }) => {
       width: 500,
       height: 650,
       alwaysOnTop: true,
-      webPreferences: { nodeIntegration: false, contextIsolation: true },
+      webPreferences: { ...ISOLATED_WEB_PREFERENCES },
     });
 
     authWindow.loadURL(authUrl);
@@ -242,6 +248,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
   });
 
@@ -253,25 +260,27 @@ function createWindow() {
   // Red de seguridad: si algo falla, no dejar el splash colgado para siempre.
   setTimeout(() => { if (splash) { closeSplash(); if (!win.isVisible()) win.show(); } }, 20000);
 
-  win.webContents.setWindowOpenHandler(({ url: winUrl }) => {
-    const isOAuth =
-      winUrl.includes('accounts.google.com') ||
-      winUrl.includes('firebaseapp.com/__/auth');
-    if (isOAuth) {
+  win.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
+    if (isOAuthPopupUrl(targetUrl)) {
       return {
         action: 'allow',
-        overrideBrowserWindowOptions: {
-          width: 500, height: 650,
-          webPreferences: { nodeIntegration: false, contextIsolation: false },
-        },
+        overrideBrowserWindowOptions: { width: 500, height: 650, webPreferences: { ...ISOLATED_WEB_PREFERENCES } },
       };
     }
+    if (isExternalLink(targetUrl)) shell.openExternal(targetUrl);
     return { action: 'deny' };
+  });
+
+  // The main window only ever shows the bundled app; anything else opens outside.
+  win.webContents.on('will-navigate', (event, targetUrl) => {
+    if (isAppUrl(targetUrl)) return;
+    event.preventDefault();
+    if (isExternalLink(targetUrl)) shell.openExternal(targetUrl);
   });
 
   const isDev = process.env.NODE_ENV === 'development';
   if (isDev) {
-    win.loadURL('http://localhost:8081');
+    win.loadURL(DEV_SERVER_ORIGIN);
     win.webContents.openDevTools();
   } else {
     win.loadURL('app://./');
