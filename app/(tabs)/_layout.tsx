@@ -25,8 +25,7 @@ export default function TabsLayout() {
   const { isDesktop } = useLayout();
   const insets = useSafeAreaInsets();
 
-  const bottomInset = Platform.OS === 'ios' ? insets.bottom : insets.bottom;
-  const BAR_H = Platform.OS === 'ios' ? 50 + bottomInset : 56 + bottomInset;
+  const BAR_H = Platform.OS === 'ios' ? 50 + insets.bottom : 56 + insets.bottom;
 
   const tabs = (
     <Tabs
@@ -39,7 +38,7 @@ export default function TabsLayout() {
               borderTopWidth: 1,
               borderTopColor: C.border,
               height: BAR_H,
-              paddingBottom: bottomInset > 0 ? bottomInset : (Platform.OS === 'ios' ? 8 : 10),
+              paddingBottom: insets.bottom > 0 ? insets.bottom : (Platform.OS === 'ios' ? 8 : 10),
               paddingTop: 6,
               elevation: 0,
             },
