@@ -21,7 +21,7 @@ import type {
   PersonWithTotal, PiggyBank, Tag,
 } from './repo/types';
 import {
-  getLastSyncAt, isAutoSyncEnabled, pullIfNeeded, pushNow,
+  getLastSyncAt, isAutoSyncEnabled, pullIfNeeded,
   schedulePush, setAutoSyncEnabled, syncNow as syncNowRemote,
 } from './sync';
 
@@ -147,22 +147,25 @@ export function ExpensesProvider({ children }: { children: ReactNode }) {
   // Migración única: generar cuotas para préstamos que aún no las tienen (idempotente).
   useEffect(() => { void InstallmentsRepo.migrateLoansToInstallments(); }, []);
 
-  // Interceptar escrituras una sola vez: cada runAsync programa un push diferido.
-  useEffect(() => {
-    const orig = db.runAsync;
-    db.runAsync = (sql: string, ...params: unknown[]) => {
-      const p = orig(sql, ...params);
-      p.then(() => schedulePush(() => tokenRef.current)).catch(() => {});
-      return p;
-    };
-    return () => { db.runAsync = orig; };
-  }, []);
-
   // Tras importar datos remotos: refrescar pantallas y la lista de transacciones.
   const reloadAfterImport = useCallback(() => {
     setDbRevision(v => v + 1);
     void fetchExpenses();
   }, [fetchExpenses]);
+  // The write interceptor is installed once, so it reads the latest callback via a ref.
+  const reloadAfterImportRef = useRef(reloadAfterImport);
+  reloadAfterImportRef.current = reloadAfterImport;
+
+  // Interceptar escrituras una sola vez: cada runAsync programa un push diferido.
+  useEffect(() => {
+    const orig = db.runAsync;
+    db.runAsync = (sql: string, ...params: unknown[]) => {
+      const p = orig(sql, ...params);
+      p.then(() => schedulePush(() => tokenRef.current, () => reloadAfterImportRef.current())).catch(() => {});
+      return p;
+    };
+    return () => { db.runAsync = orig; };
+  }, []);
 
   // Ejecuta una operación de Drive, refrescando el token una vez si expiró.
   const runWithToken = useCallback(async <T,>(fn: (token: string) => Promise<T>): Promise<T> => {
@@ -185,13 +188,14 @@ export function ExpensesProvider({ children }: { children: ReactNode }) {
     setSyncEnabledState(enabled);
     if (enabled && tokenRef.current) {
       try {
-        await runWithToken(t => pushNow(t));
+        const res = await runWithToken(t => syncNowRemote(t));
+        if (res.changed) reloadAfterImport();
         setLastSyncAt(await getLastSyncAt());
       } catch (e) {
-        console.warn('[sync] push inicial falló:', e);
+        console.warn('[sync] sync inicial falló:', e);
       }
     }
-  }, [runWithToken]);
+  }, [runWithToken, reloadAfterImport]);
 
   const syncNow = useCallback(async (): Promise<{ changed: boolean; error?: string }> => {
     if (!tokenRef.current) return { changed: false, error: 'SIGN_IN_REQUIRED' };

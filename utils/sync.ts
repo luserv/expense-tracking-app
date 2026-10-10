@@ -2,8 +2,8 @@
  * Sincronización entre dispositivos (MVP: archivo .db completo, "último que guarda gana").
  *
  * Flujo (sincronización por registro):
- *  - pushNow: sube la DB local al archivo canónico de Drive, marcada con este deviceId,
- *    y guarda la firma de contenido subida.
+ *  - Toda subida fusiona antes lo remoto (mergeThenUpload), así nunca se pisa el
+ *    trabajo de otro dispositivo que todavía no vimos. Las operaciones se serializan.
  *  - pullIfNeeded: si el archivo remoto lo escribió OTRO dispositivo y es más nuevo que
  *    nuestra marca, lo baja y lo FUSIONA fila por fila (gana la versión más nueva de
  *    cada registro, vía updated_at). Si la unión local difiere de lo último que subimos,
@@ -62,8 +62,22 @@ export interface PullResult {
   reason?: 'no-remote' | 'own' | 'up-to-date';
 }
 
-/** Baja y FUSIONA la DB remota solo si la escribió otro dispositivo y es más nueva. */
-export async function pullIfNeeded(token: string): Promise<PullResult> {
+// ── Serialization ──────────────────────────────────────────────────────────────
+
+// Sync steps read and write the same remote file and the same local DB, so they
+// must never overlap (e.g. a scheduled push racing a foreground pull).
+let queue: Promise<unknown> = Promise.resolve();
+
+function serialized<T>(task: () => Promise<T>): Promise<T> {
+  const run = queue.then(task, task);
+  queue = run.catch(() => {});
+  return run;
+}
+
+// ── Steps ───────────────────────────────────────────────────────────────────────
+
+/** Downloads and merges the remote DB only if another device wrote it after our watermark. */
+async function mergeRemoteIfNewer(token: string): Promise<PullResult> {
   const meta = await getSyncMeta(token);
   if (!meta) return { changed: false, reason: 'no-remote' };
 
@@ -77,18 +91,11 @@ export async function pullIfNeeded(token: string): Promise<PullResult> {
   await mergeDatabaseFromBase64(base64);
   await AsyncStorage.setItem(WATERMARK_KEY, meta.modifiedTime);
   await AsyncStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
-
-  // Si la unión local difiere de lo último que subimos, propagamos (con tope anti-bucle).
-  const sig = await getDatabaseSignature();
-  const lastSig = await AsyncStorage.getItem(SIG_KEY);
-  if (sig !== lastSig) {
-    await pushNow(token);
-  }
   return { changed: true };
 }
 
-/** Sube la DB local al archivo de sync de Drive y registra la firma subida. */
-export async function pushNow(token: string): Promise<void> {
+/** Uploads the local DB to the Drive sync file and records the uploaded signature. */
+async function upload(token: string): Promise<void> {
   const base64 = await exportDatabaseToBase64();
   const myId = await getDeviceId();
   const meta = await uploadSyncDB(token, base64, myId);
@@ -100,24 +107,54 @@ export async function pushNow(token: string): Promise<void> {
   ]);
 }
 
-/**
- * Sincronización manual: baja+fusiona cambios remotos; si no había nada nuevo,
- * sube la versión local. Retorna si se fusionaron cambios remotos.
- */
-export async function syncNow(token: string): Promise<PullResult> {
-  const pulled = await pullIfNeeded(token);
-  if (!pulled.changed) {
-    await pushNow(token);
-  }
+/** Merge remote changes first, then upload: never overwrite another device's unseen work. */
+async function mergeThenUpload(token: string): Promise<PullResult> {
+  const pulled = await mergeRemoteIfNewer(token);
+  await upload(token);
   return pulled;
 }
 
-// ── Push con debounce tras escrituras ──────────────────────────────────────────
+// ── Public API ────────────────────────────────────────────────────────────────
+
+/**
+ * Background pull: merges remote changes and propagates the union only if it
+ * differs from what we last uploaded. The signature check prevents ping-pong
+ * between devices.
+ */
+export function pullIfNeeded(token: string): Promise<PullResult> {
+  return serialized(async () => {
+    const pulled = await mergeRemoteIfNewer(token);
+    if (pulled.changed) {
+      const sig = await getDatabaseSignature();
+      const lastSig = await AsyncStorage.getItem(SIG_KEY);
+      if (sig !== lastSig) await upload(token);
+    }
+    return pulled;
+  });
+}
+
+/**
+ * Full sync (manual button, enabling sync, after local writes): merge remote
+ * changes, then always upload so local changes propagate.
+ * Returns whether remote changes were merged.
+ */
+export function syncNow(token: string): Promise<PullResult> {
+  return serialized(() => mergeThenUpload(token));
+}
+
+// ── Debounced sync after writes ───────────────────────────────────────────────
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Programa un push diferido (se reinicia con cada escritura para agrupar cambios). */
-export function schedulePush(getToken: () => string | null, delay = 4000): void {
+/**
+ * Schedules a deferred sync, restarted by every write so changes are batched.
+ * It merges before uploading; onRemoteMerged runs when remote changes arrived.
+ */
+export function schedulePush(
+  getToken: () => string | null,
+  onRemoteMerged?: () => void,
+  delay = 4000,
+): void {
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(async () => {
     pushTimer = null;
@@ -125,7 +162,8 @@ export function schedulePush(getToken: () => string | null, delay = 4000): void 
     if (!token) return;
     if (!(await isAutoSyncEnabled())) return;
     try {
-      await pushNow(token);
+      const { changed } = await syncNow(token);
+      if (changed) onRemoteMerged?.();
     } catch (e) {
       console.warn('[sync] push falló:', e);
     }
