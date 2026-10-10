@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const url = require('url');
 const { CREATE_TABLES, CREATE_INDEXES, MIGRATIONS, SEED, SYNC_TABLES, buildMergeStatement } = require('../utils/dbSchema.js');
+const { assertReadStatement, assertDataStatement, assertTransactionControl } = require('./sqlGuard');
 
 protocol.registerSchemesAsPrivileged([
   // corsEnabled es CLAVE: los fonts (@font-face / FontFace API) se piden siempre en
@@ -36,18 +37,22 @@ function initDB() {
 // ── IPC: database ─────────────────────────────────────────────────────────────
 
 ipcMain.handle('db:exec', (_event, sql) => {
+  assertTransactionControl(sql);
   db.exec(sql);
 });
 
 ipcMain.handle('db:run', (_event, sql, params) => {
+  assertDataStatement(sql);
   db.prepare(sql).run(...(params || []));
 });
 
 ipcMain.handle('db:getAll', (_event, sql, params) => {
+  assertReadStatement(sql);
   return db.prepare(sql).all(...(params || []));
 });
 
 ipcMain.handle('db:getFirst', (_event, sql, params) => {
+  assertReadStatement(sql);
   return db.prepare(sql).get(...(params || [])) ?? null;
 });
 
