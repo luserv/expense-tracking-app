@@ -159,7 +159,7 @@ export default function ExpenseDetail() {
               <Text style={s.transferValue}>{accounts.find(a => a.account_id === destAccountId)?.name ?? '—'}</Text>
             </View>
             <Text style={s.transferHint}>
-              {t.common.transfer} · {t.expenses.deleteTransferConfirm.includes('eliminar') ? 'Para cambiar cuentas, eliminá y creá una nueva.' : 'To change accounts, delete and create a new transfer.'}
+              {t.common.transfer} · {t.expenses.transferHint}
             </Text>
           </View>
         )}

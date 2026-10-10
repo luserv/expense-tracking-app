@@ -153,7 +153,7 @@ export default function StatsScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={s.accName}>{a.name}</Text>
                     <Text style={s.accType}>
-                      {a.account_type === 'liability' ? 'Pasivo' : 'Activo'} · {a.currency}
+                      {a.account_type === 'liability' ? t.config.accountTypeLiability : t.config.accountTypeAsset} · {a.currency}
                     </Text>
                   </View>
                   <Text style={[s.accBalance, { color: a.balance >= 0 ? C.income : C.expense }]}>
