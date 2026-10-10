@@ -34,7 +34,11 @@ function initDB() {
   for (const sql of CREATE_TABLES) db.exec(sql);
   for (const sql of MIGRATIONS) { try { db.prepare(sql).run(); } catch {} }
   for (const sql of CREATE_INDEXES) { try { db.exec(sql); } catch {} }
-  for (const sql of SEED) db.exec(sql);
+  // Seed only on first run: if accounts already exist, skip to avoid overhead.
+  const hasAccounts = db.prepare('SELECT COUNT(*) c FROM account').get();
+  if (hasAccounts && hasAccounts.c === 0) {
+    for (const sql of SEED) db.exec(sql);
+  }
 }
 
 // ── IPC: database ─────────────────────────────────────────────────────────────
@@ -69,6 +73,7 @@ ipcMain.handle('db:readAsBase64', () => {
 ipcMain.handle('db:writeFromBase64', (_event, base64) => {
   try {
     const buffer = Buffer.from(base64, 'base64');
+    db.pragma('wal_checkpoint(FULL)');
     db.close();
     fs.writeFileSync(dbPath, buffer);
     initDB();
@@ -83,7 +88,9 @@ ipcMain.handle('db:mergeFromBase64', (_event, base64) => {
   const tmpPath = path.join(userDataPath, '_sync_remote.db');
   try {
     fs.writeFileSync(tmpPath, Buffer.from(base64, 'base64'));
-    db.exec(`ATTACH DATABASE '${tmpPath.replace(/'/g, "''")}' AS remote`);
+    // Validate path contains only safe characters before interpolating into SQL.
+    const safePath = tmpPath.replace(/[^a-zA-Z0-9._/\-]/g, '');
+    db.exec(`ATTACH DATABASE '${safePath.replace(/'/g, "''")}' AS remote`);
     const merge = db.transaction(() => {
       for (const { table, pk } of SYNC_TABLES) {
         const localCols = db.prepare(`PRAGMA table_info(${table})`).all().map(r => r.name);
