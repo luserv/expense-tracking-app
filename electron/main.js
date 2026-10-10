@@ -1,12 +1,12 @@
 const { app, BrowserWindow, ipcMain, protocol, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const url = require('url');
 const { CREATE_TABLES, CREATE_INDEXES, MIGRATIONS, SEED, SYNC_TABLES, buildMergeStatement } = require('../utils/dbSchema.js');
 const { assertReadStatement, assertDataStatement, assertTransactionControl } = require('./sqlGuard');
 const {
   isGoogleAccountsUrl, isOAuthPopupUrl, isAppUrl, isExternalLink, ISOLATED_WEB_PREFERENCES, DEV_SERVER_ORIGIN,
 } = require('./navigationPolicy');
+const { createAppProtocolHandler } = require('./appProtocol');
 
 protocol.registerSchemesAsPrivileged([
   // corsEnabled es CLAVE: los fonts (@font-face / FontFace API) se piden siempre en
@@ -294,51 +294,7 @@ process.on('uncaughtException', (err) => {
 });
 
 app.whenReady().then(() => {
-  protocol.handle('app', (request) => {
-    const distPath = getDistPath();
-    let filePath = request.url.replace('app://./', '').replace('app://', '');
-    filePath = filePath.split('?')[0].split('#')[0];
-    filePath = decodeURIComponent(filePath);
-    const fullPath = path.join(distPath, filePath);
-    const targetPath = fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()
-      ? fullPath
-      : path.join(distPath, 'index.html');
-
-    // Usar fs.readFileSync (parcheado por Electron para leer dentro del ASAR)
-    // en vez de net.fetch(file://) que no entiende el formato ASAR de Chromium.
-    const MIME = {
-      '.html': 'text/html; charset=utf-8',
-      '.js':   'application/javascript',
-      '.mjs':  'application/javascript',
-      '.css':  'text/css',
-      '.json': 'application/json',
-      '.png':  'image/png',
-      '.jpg':  'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.gif':  'image/gif',
-      '.svg':  'image/svg+xml',
-      '.ico':  'image/x-icon',
-      '.webp': 'image/webp',
-      '.ttf':  'font/ttf',
-      '.otf':  'font/otf',
-      '.woff': 'font/woff',
-      '.woff2':'font/woff2',
-    };
-    const ext = path.extname(targetPath).toLowerCase();
-    const mime = MIME[ext] || 'application/octet-stream';
-    try {
-      const data = fs.readFileSync(targetPath);
-      return new Response(data, {
-        headers: {
-          'Content-Type': mime,
-          // Necesario para que la petición CORS del font no sea rechazada.
-          'Access-Control-Allow-Origin': '*',
-        },
-      });
-    } catch {
-      return new Response('Not found', { status: 404 });
-    }
-  });
+  protocol.handle('app', createAppProtocolHandler(getDistPath));
 
   // Mostrar el splash de inmediato; diferir initDB para que alcance a pintarse
   // (initDB es síncrono y puede tardar la primera vez creando índices).
