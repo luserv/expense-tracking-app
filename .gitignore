@@ -66,3 +66,7 @@ android/app/release.keystore
 # build
 *.apk 
 *.abb
+
+# Claude Code local files (skills live in ~/.claude/skills)
+.claude/skills/
+.claude/settings.local.json
