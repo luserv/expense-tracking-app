@@ -27,7 +27,7 @@ function calcTotal(a: number, r: number) { return !r || r <= 0 ? a : a + a * (r 
 function todayIso() { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; }
 function displayToIso(d: string) { const [dd,mm,yy] = d.split('/'); if (!dd||!mm||!yy||yy.length!==4) return ''; return `${yy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`; }
 function isoToDisplay(i: string) { const [y,m,d] = i.split('-'); return `${d}/${m}/${y}`; }
-function daysUntil(iso: string) { const t = new Date(); t.setHours(0,0,0,0); const g = new Date(iso+'T00:00:00'); return Math.ceil((g.getTime()-t.getTime())/(86400000)); }
+function daysUntil(iso: string) { const t = new Date(); t.setUTCHours(0,0,0,0); const [y,m,d] = iso.split('-').map(Number); const g = Date.UTC(y, m-1, d); return Math.ceil((g-t.getTime())/(86400000)); }
 
 function Avatar({ label, color, size = 40 }: { label: string; color: string; size?: number }) {
   return (

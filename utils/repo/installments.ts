@@ -15,10 +15,10 @@ function installmentId(loanId: string, number: number): string {
 
 /** Avanza una fecha YYYY-MM-DD según la frecuencia, k períodos. */
 export function advanceByFreq(dateStr: string, freq: LoanFrequency, k: number): string {
-  const d = new Date(dateStr + 'T12:00:00');
-  if (freq === 'weekly') d.setDate(d.getDate() + 7 * k);
-  else if (freq === 'biweekly') d.setDate(d.getDate() + 14 * k);
-  else d.setMonth(d.getMonth() + k); // monthly
+  const d = new Date(dateStr + 'T00:00:00Z');
+  if (freq === 'weekly') d.setUTCDate(d.getUTCDate() + 7 * k);
+  else if (freq === 'biweekly') d.setUTCDate(d.getUTCDate() + 14 * k);
+  else d.setUTCMonth(d.getUTCMonth() + k); // monthly
   return d.toISOString().slice(0, 10);
 }
 
@@ -32,8 +32,11 @@ export function computeEffectiveAmounts(installments: Installment[], today: stri
   return installments.map(inst => {
     const effectiveAmount = Math.round((inst.amount + carry) * 100) / 100;
     const isOverdue = inst.due_date < today;
-    const hasPartial = inst.paid_amount > 0 && inst.paid_amount < inst.amount;
+    const fullyPaid = inst.paid_amount >= inst.amount;
+    const hasPartial = inst.paid_amount > 0 && !fullyPaid;
     const remaining = Math.max(0, Math.round((effectiveAmount - inst.paid_amount) * 100) / 100);
+    // Carry forward only from overdue installments with partial payments.
+    // Non-overdue partials or fully-paid installments reset carry.
     carry = isOverdue && hasPartial ? remaining : 0;
     return { ...inst, amount: effectiveAmount };
   });
@@ -76,6 +79,14 @@ export async function regenerateSchedule(
     const count = Math.max(1, n);
     const amounts = splitAmounts(total, count);
     const ts = Date.now();
+
+    // First, soft-delete any existing installments beyond the new count.
+    await tx.runAsync(
+      'UPDATE installment SET deleted=1, updated_at=? WHERE loan_id=? AND number > ? AND deleted=0',
+      ts, loanId, count
+    );
+
+    // Then upsert the installments for the new schedule.
     for (let i = 0; i < count; i++) {
       const num = i + 1;
       await tx.runAsync(
@@ -87,11 +98,6 @@ export async function regenerateSchedule(
         installmentId(loanId, num), loanId, num, advanceByFreq(firstDue, freq, i), amounts[i], ts
       );
     }
-    // Cuotas que ya no existen (si se redujo la cantidad).
-    await tx.runAsync(
-      'UPDATE installment SET deleted=1, updated_at=? WHERE loan_id=? AND number > ? AND deleted=0',
-      ts, loanId, count
-    );
     await recomputeLoanPaid(loanId, tx);
   });
 }
@@ -117,6 +123,10 @@ async function recomputeLoanPaid(loanId: string, conn: DbAdapter = db): Promise<
 /** Registra el pago (total o parcial) de una cuota en una fecha real. */
 export async function payInstallment(installmentId: string, paidAmount: number, paidDate: string): Promise<boolean> {
   try {
+    if (paidAmount <= 0) {
+      // Treat as unpay instead of creating inconsistent state.
+      return unpayInstallment(installmentId);
+    }
     await db.runAsync(
       'UPDATE installment SET paid_amount=?, paid_date=?, updated_at=? WHERE installment_id=?',
       paidAmount, paidDate, Date.now(), installmentId
