@@ -7,6 +7,7 @@ import React, { createContext, ReactNode, useCallback, useContext, useEffect, us
 import { AppState } from 'react-native';
 import { useAuth } from './authContext';
 import { db } from './db';
+import type { DbAdapter } from './dbTransactions';
 import * as AccountsRepo from './repo/accounts';
 import * as BillsRepo from './repo/bills';
 import * as BudgetsRepo from './repo/budgets';
@@ -156,15 +157,25 @@ export function ExpensesProvider({ children }: { children: ReactNode }) {
   const reloadAfterImportRef = useRef(reloadAfterImport);
   reloadAfterImportRef.current = reloadAfterImport;
 
-  // Interceptar escrituras una sola vez: cada runAsync programa un push diferido.
+  // Interceptar escrituras una sola vez: cada runAsync o transacción programa un push diferido.
   useEffect(() => {
-    const orig = db.runAsync;
+    const scheduleSync = () => schedulePush(() => tokenRef.current, () => reloadAfterImportRef.current());
+    const origRun = db.runAsync;
+    const origTransaction = db.withTransactionAsync;
     db.runAsync = (sql: string, ...params: unknown[]) => {
-      const p = orig(sql, ...params);
-      p.then(() => schedulePush(() => tokenRef.current, () => reloadAfterImportRef.current())).catch(() => {});
+      const p = origRun(sql, ...params);
+      p.then(scheduleSync).catch(() => {});
       return p;
     };
-    return () => { db.runAsync = orig; };
+    db.withTransactionAsync = <T,>(work: (tx: DbAdapter) => Promise<T>) => {
+      const p = origTransaction(work);
+      p.then(scheduleSync).catch(() => {});
+      return p;
+    };
+    return () => {
+      db.runAsync = origRun;
+      db.withTransactionAsync = origTransaction;
+    };
   }, []);
 
   // Ejecuta una operación de Drive, refrescando el token una vez si expiró.

@@ -66,21 +66,24 @@ export async function updateExpense(id: string, data: Omit<Expense, 'expense_id'
 
 export async function deleteExpense(id: string): Promise<boolean> {
   try {
-    const ts = Date.now();
-    const exp = await db.getFirstAsync<{ transfer_pair_id: string | null }>(
-      'SELECT transfer_pair_id FROM expense WHERE expense_id = ?', id
-    );
-    if (exp?.transfer_pair_id) {
-      await db.runAsync(
-        'UPDATE expense_tag SET deleted=1, updated_at=? WHERE expense_id IN (SELECT expense_id FROM expense WHERE transfer_pair_id = ?)',
-        ts, exp.transfer_pair_id
+    // The expense, its transfer pair and their tags are deleted together.
+    return await db.withTransactionAsync(async tx => {
+      const ts = Date.now();
+      const exp = await tx.getFirstAsync<{ transfer_pair_id: string | null }>(
+        'SELECT transfer_pair_id FROM expense WHERE expense_id = ?', id
       );
-      await db.runAsync('UPDATE expense SET deleted=1, updated_at=? WHERE transfer_pair_id = ?', ts, exp.transfer_pair_id);
-    } else {
-      await db.runAsync('UPDATE expense_tag SET deleted=1, updated_at=? WHERE expense_id = ?', ts, id);
-      await db.runAsync('UPDATE expense SET deleted=1, updated_at=? WHERE expense_id = ?', ts, id);
-    }
-    return true;
+      if (exp?.transfer_pair_id) {
+        await tx.runAsync(
+          'UPDATE expense_tag SET deleted=1, updated_at=? WHERE expense_id IN (SELECT expense_id FROM expense WHERE transfer_pair_id = ?)',
+          ts, exp.transfer_pair_id
+        );
+        await tx.runAsync('UPDATE expense SET deleted=1, updated_at=? WHERE transfer_pair_id = ?', ts, exp.transfer_pair_id);
+      } else {
+        await tx.runAsync('UPDATE expense_tag SET deleted=1, updated_at=? WHERE expense_id = ?', ts, id);
+        await tx.runAsync('UPDATE expense SET deleted=1, updated_at=? WHERE expense_id = ?', ts, id);
+      }
+      return true;
+    });
   } catch (e) {
     console.error(e);
     return false;
@@ -128,24 +131,24 @@ export async function createTransfer(data: {
     const id1 = genId('exp');
     const id2 = genId('exp');
 
-    await db.runAsync(
-      `INSERT INTO expense
-        (expense_id, description, amount, date, account_id, destination_account_id,
-         transfer_pair_id, notes, type, updated_at, deleted)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'expense', ?, 0)`,
-      id1, data.description, data.amount, data.date,
-      data.account_id, data.destination_account_id,
-      pairId, data.notes ?? null, ts
-    );
-    await db.runAsync(
-      `INSERT INTO expense
-        (expense_id, description, amount, date, account_id, destination_account_id,
-         transfer_pair_id, notes, type, updated_at, deleted)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'income', ?, 0)`,
-      id2, data.description, data.amount, data.date,
-      data.destination_account_id, data.account_id,
-      pairId, data.notes ?? null, ts
-    );
+    const insertExpense = `INSERT INTO expense
+      (expense_id, description, amount, date, account_id, destination_account_id,
+       transfer_pair_id, notes, type, updated_at, deleted)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`;
+
+    // Both legs of the transfer are written atomically.
+    await db.withTransactionAsync(async tx => {
+      await tx.runAsync(insertExpense,
+        id1, data.description, data.amount, data.date,
+        data.account_id, data.destination_account_id,
+        pairId, data.notes ?? null, 'expense', ts
+      );
+      await tx.runAsync(insertExpense,
+        id2, data.description, data.amount, data.date,
+        data.destination_account_id, data.account_id,
+        pairId, data.notes ?? null, 'income', ts
+      );
+    });
     return true;
   } catch (e) {
     console.error(e);

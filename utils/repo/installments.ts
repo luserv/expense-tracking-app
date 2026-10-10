@@ -1,5 +1,6 @@
 /** Repo de cuotas (installments). Programación de pagos con vencimiento y atraso. */
 import { db } from '../db';
+import type { DbAdapter } from '../dbTransactions';
 import { allocatePayments } from './paymentAllocation';
 import type { Installment, LoanFrequency } from './types';
 
@@ -70,26 +71,29 @@ export async function createInstallmentsForLoan(
 export async function regenerateSchedule(
   loanId: string, total: number, n: number, firstDue: string, freq: LoanFrequency
 ): Promise<void> {
-  const count = Math.max(1, n);
-  const amounts = splitAmounts(total, count);
-  const ts = Date.now();
-  for (let i = 0; i < count; i++) {
-    const num = i + 1;
-    await db.runAsync(
-      `INSERT INTO installment
-        (installment_id, loan_id, number, due_date, amount, paid_date, paid_amount, updated_at, deleted)
-       VALUES (?, ?, ?, ?, ?, NULL, 0, ?, 0)
-       ON CONFLICT(installment_id) DO UPDATE SET
-         due_date=excluded.due_date, amount=excluded.amount, deleted=0, updated_at=excluded.updated_at`,
-      installmentId(loanId, num), loanId, num, advanceByFreq(firstDue, freq, i), amounts[i], ts
+  // Soft-deletes, upserts and is_paid must land together or not at all.
+  await db.withTransactionAsync(async tx => {
+    const count = Math.max(1, n);
+    const amounts = splitAmounts(total, count);
+    const ts = Date.now();
+    for (let i = 0; i < count; i++) {
+      const num = i + 1;
+      await tx.runAsync(
+        `INSERT INTO installment
+          (installment_id, loan_id, number, due_date, amount, paid_date, paid_amount, updated_at, deleted)
+         VALUES (?, ?, ?, ?, ?, NULL, 0, ?, 0)
+         ON CONFLICT(installment_id) DO UPDATE SET
+           due_date=excluded.due_date, amount=excluded.amount, deleted=0, updated_at=excluded.updated_at`,
+        installmentId(loanId, num), loanId, num, advanceByFreq(firstDue, freq, i), amounts[i], ts
+      );
+    }
+    // Cuotas que ya no existen (si se redujo la cantidad).
+    await tx.runAsync(
+      'UPDATE installment SET deleted=1, updated_at=? WHERE loan_id=? AND number > ? AND deleted=0',
+      ts, loanId, count
     );
-  }
-  // Cuotas que ya no existen (si se redujo la cantidad).
-  await db.runAsync(
-    'UPDATE installment SET deleted=1, updated_at=? WHERE loan_id=? AND number > ? AND deleted=0',
-    ts, loanId, count
-  );
-  await recomputeLoanPaid(loanId);
+    await recomputeLoanPaid(loanId, tx);
+  });
 }
 
 export async function getInstallments(loanId: string): Promise<Installment[]> {
@@ -101,13 +105,13 @@ export async function getInstallments(loanId: string): Promise<Installment[]> {
 }
 
 /** Recalcula loan.is_paid: pagado cuando toda cuota tiene paid_amount >= amount. */
-async function recomputeLoanPaid(loanId: string): Promise<void> {
-  const row = await db.getFirstAsync<{ total: number; paid: number }>(
+async function recomputeLoanPaid(loanId: string, conn: DbAdapter = db): Promise<void> {
+  const row = await conn.getFirstAsync<{ total: number; paid: number }>(
     `SELECT COUNT(*) total, COALESCE(SUM(CASE WHEN paid_amount >= amount THEN 1 ELSE 0 END), 0) paid
      FROM installment WHERE loan_id=? AND deleted=0`, loanId
   );
   const isPaid = row && row.total > 0 && row.paid === row.total ? 1 : 0;
-  await db.runAsync('UPDATE loan SET is_paid=?, updated_at=? WHERE loan_id=?', isPaid, Date.now(), loanId);
+  await conn.runAsync('UPDATE loan SET is_paid=?, updated_at=? WHERE loan_id=?', isPaid, Date.now(), loanId);
 }
 
 /** Registra el pago (total o parcial) de una cuota en una fecha real. */
@@ -131,37 +135,40 @@ export async function payInstallment(installmentId: string, paidAmount: number, 
  */
 export async function payInstallmentCascade(installmentId: string, amount: number, paidDate: string): Promise<boolean> {
   try {
-    const target = await db.getFirstAsync<{ loan_id: string; number: number }>(
-      'SELECT loan_id, number FROM installment WHERE installment_id=?', installmentId
-    );
-    if (!target) return false;
-
-    const list = await db.getAllAsync<{ installment_id: string; amount: number; paid_amount: number }>(
-      'SELECT installment_id, amount, paid_amount FROM installment WHERE loan_id=? AND number>=? AND deleted=0 ORDER BY number ASC',
-      target.loan_id, target.number
-    );
-
-    let remaining = amount;
-    const ts = Date.now();
-
-    for (const inst of list) {
-      const space = Math.round((inst.amount - inst.paid_amount) * 100) / 100;
-      if (space <= 0) continue; // cuota ya saldada → saltar
-      const give = Math.min(remaining, space);
-      if (give <= 0) break;
-      const newPaid = Math.round((inst.paid_amount + give) * 100) / 100;
-      await db.runAsync(
-        'UPDATE installment SET paid_amount=?, paid_date=?, updated_at=? WHERE installment_id=?',
-        newPaid, paidDate, ts, inst.installment_id
+    // Reads and writes in one transaction so a partial cascade never persists.
+    return await db.withTransactionAsync(async tx => {
+      const target = await tx.getFirstAsync<{ loan_id: string; number: number }>(
+        'SELECT loan_id, number FROM installment WHERE installment_id=?', installmentId
       );
-      remaining = Math.round((remaining - give) * 100) / 100;
-      if (remaining <= 0) break;
-    }
-    // Si sobra (pagó más que lo pendiente), el excedente se descarta: no se puede
-    // deber menos de cero. Así ninguna cuota queda sobrepagada.
+      if (!target) return false;
 
-    await recomputeLoanPaid(target.loan_id);
-    return true;
+      const list = await tx.getAllAsync<{ installment_id: string; amount: number; paid_amount: number }>(
+        'SELECT installment_id, amount, paid_amount FROM installment WHERE loan_id=? AND number>=? AND deleted=0 ORDER BY number ASC',
+        target.loan_id, target.number
+      );
+
+      let remaining = amount;
+      const ts = Date.now();
+
+      for (const inst of list) {
+        const space = Math.round((inst.amount - inst.paid_amount) * 100) / 100;
+        if (space <= 0) continue; // cuota ya saldada → saltar
+        const give = Math.min(remaining, space);
+        if (give <= 0) break;
+        const newPaid = Math.round((inst.paid_amount + give) * 100) / 100;
+        await tx.runAsync(
+          'UPDATE installment SET paid_amount=?, paid_date=?, updated_at=? WHERE installment_id=?',
+          newPaid, paidDate, ts, inst.installment_id
+        );
+        remaining = Math.round((remaining - give) * 100) / 100;
+        if (remaining <= 0) break;
+      }
+      // Si sobra (pagó más que lo pendiente), el excedente se descarta: no se puede
+      // deber menos de cero. Así ninguna cuota queda sobrepagada.
+
+      await recomputeLoanPaid(target.loan_id, tx);
+      return true;
+    });
   } catch (e) { console.error(e); return false; }
 }
 
@@ -191,41 +198,44 @@ export async function migrateLoansToInstallments(): Promise<void> {
     }>('SELECT loan_id, amount, interest_rate, months, date, frequency, first_due_date FROM loan WHERE deleted=0');
 
     for (const loan of loans) {
-      const has = await db.getFirstAsync<{ c: number }>(
-        'SELECT COUNT(*) c FROM installment WHERE loan_id=? AND deleted=0', loan.loan_id
-      );
-      if (has && has.c > 0) continue; // ya migrado
-
-      const n = Math.max(1, loan.months || 1);
-      const freq = (loan.frequency as LoanFrequency) || 'monthly';
-      // Primera cuota: un período después de prestar (si no estaba definida).
-      const firstDue = loan.first_due_date || advanceByFreq(loan.date, freq, 1);
-      if (!loan.first_due_date) {
-        await db.runAsync(
-          'UPDATE loan SET first_due_date=?, frequency=?, updated_at=? WHERE loan_id=?',
-          firstDue, freq, Date.now(), loan.loan_id
+      // One transaction per loan: a failure never leaves a loan half-migrated.
+      await db.withTransactionAsync(async tx => {
+        const has = await tx.getFirstAsync<{ c: number }>(
+          'SELECT COUNT(*) c FROM installment WHERE loan_id=? AND deleted=0', loan.loan_id
         );
-      }
+        if (has && has.c > 0) return; // ya migrado
 
-      const total = loan.amount + loan.amount * (loan.interest_rate || 0) / 100;
-      const amounts = splitAmounts(total, n);
+        const n = Math.max(1, loan.months || 1);
+        const freq = (loan.frequency as LoanFrequency) || 'monthly';
+        // Primera cuota: un período después de prestar (si no estaba definida).
+        const firstDue = loan.first_due_date || advanceByFreq(loan.date, freq, 1);
+        if (!loan.first_due_date) {
+          await tx.runAsync(
+            'UPDATE loan SET first_due_date=?, frequency=?, updated_at=? WHERE loan_id=?',
+            firstDue, freq, Date.now(), loan.loan_id
+          );
+        }
 
-      const pays = await db.getAllAsync<{ amount: number; date: string }>(
-        'SELECT amount, date FROM payment WHERE loan_id=? AND deleted=0 ORDER BY date ASC', loan.loan_id
-      );
-      const allocations = allocatePayments(amounts, pays);
-      const ts = Date.now();
+        const total = loan.amount + loan.amount * (loan.interest_rate || 0) / 100;
+        const amounts = splitAmounts(total, n);
 
-      for (let i = 0; i < n; i++) {
-        const { paidAmount, paidDate } = allocations[i];
-        await db.runAsync(
-          `INSERT OR IGNORE INTO installment
-            (installment_id, loan_id, number, due_date, amount, paid_date, paid_amount, updated_at, deleted)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-          installmentId(loan.loan_id, i + 1), loan.loan_id, i + 1, advanceByFreq(firstDue, freq, i), amounts[i], paidDate, paidAmount, ts
+        const pays = await tx.getAllAsync<{ amount: number; date: string }>(
+          'SELECT amount, date FROM payment WHERE loan_id=? AND deleted=0 ORDER BY date ASC', loan.loan_id
         );
-      }
-      await recomputeLoanPaid(loan.loan_id);
+        const allocations = allocatePayments(amounts, pays);
+        const ts = Date.now();
+
+        for (let i = 0; i < n; i++) {
+          const { paidAmount, paidDate } = allocations[i];
+          await tx.runAsync(
+            `INSERT OR IGNORE INTO installment
+              (installment_id, loan_id, number, due_date, amount, paid_date, paid_amount, updated_at, deleted)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+            installmentId(loan.loan_id, i + 1), loan.loan_id, i + 1, advanceByFreq(firstDue, freq, i), amounts[i], paidDate, paidAmount, ts
+          );
+        }
+        await recomputeLoanPaid(loan.loan_id, tx);
+      });
     }
   } catch (e) {
     console.error('[migración cuotas]', e);
